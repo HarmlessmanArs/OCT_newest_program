@@ -59,6 +59,23 @@
        <string>Delete images</string>
       </property>
      </widget>
+     <widget class="QPushButton" name="imgs_t_processButton">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>150</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <property name="text">
+       <string>Images to process</string>
+      </property>
+     </widget>
     </widget>
    </item>
    <item row="1" column="0">
@@ -70,6 +87,12 @@
       <enum>Qt::Orientation::Horizontal</enum>
      </property>
      <widget class="QPushButton" name="roiButton">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
       <property name="minimumSize">
        <size>
         <width>50</width>
@@ -81,6 +104,12 @@
       </property>
      </widget>
      <widget class="QPushButton" name="boundButton">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
       <property name="minimumSize">
        <size>
         <width>100</width>
@@ -109,6 +138,12 @@
       </property>
      </widget>
      <widget class="QPushButton" name="mu_tButton">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
       <property name="minimumSize">
        <size>
         <width>131</width>
@@ -120,6 +155,12 @@
       </property>
      </widget>
      <widget class="QPushButton" name="calcButton">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
       <property name="minimumSize">
        <size>
         <width>131</width>
