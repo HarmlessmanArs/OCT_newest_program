@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1199</width>
-    <height>748</height>
+    <width>800</width>
+    <height>500</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -72,7 +72,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1199</width>
+     <width>800</width>
      <height>33</height>
     </rect>
    </property>
@@ -91,13 +91,15 @@
      <string>Instruments</string>
     </property>
     <addaction name="actionCreate_new_gallery"/>
-    <addaction name="actionDelete_gallery"/>
+    <addaction name="actionCreate_table"/>
     <addaction name="actionData_export"/>
    </widget>
    <widget class="QMenu" name="menuGraphics">
     <property name="title">
      <string>Graphics</string>
     </property>
+    <addaction name="actionLine_graph"/>
+    <addaction name="actionScatter_graph"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
@@ -106,8 +108,17 @@
     <addaction name="actionHelp"/>
     <addaction name="actionAbout"/>
    </widget>
+   <widget class="QMenu" name="menuData_acquisition">
+    <property name="title">
+     <string>Data acquisition</string>
+    </property>
+    <addaction name="actionIntensity_calculation"/>
+    <addaction name="actionExtinction_coefficient"/>
+    <addaction name="actionApproximation"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuInstruments"/>
+   <addaction name="menuData_acquisition"/>
    <addaction name="menuGraphics"/>
    <addaction name="menuHelp"/>
   </widget>
@@ -178,6 +189,39 @@
   <action name="actionAbout">
    <property name="text">
     <string>About</string>
+   </property>
+  </action>
+  <action name="actionCreate_table">
+   <property name="text">
+    <string>Create table</string>
+   </property>
+  </action>
+  <action name="actionIntensity_calculation">
+   <property name="checkable">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Intensity calculation</string>
+   </property>
+  </action>
+  <action name="actionExtinction_coefficient">
+   <property name="text">
+    <string>Extinction coefficient</string>
+   </property>
+  </action>
+  <action name="actionApproximation">
+   <property name="text">
+    <string>Approximation</string>
+   </property>
+  </action>
+  <action name="actionLine_graph">
+   <property name="text">
+    <string>Line graph</string>
+   </property>
+  </action>
+  <action name="actionScatter_graph">
+   <property name="text">
+    <string>Scatter graph</string>
    </property>
   </action>
  </widget>
