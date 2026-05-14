@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>800</width>
+    <height>500</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>800</width>
+    <height>500</height>
+   </size>
+  </property>
+  <property name="maximumSize">
+   <size>
+    <width>16777215</width>
+    <height>16777215</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <property name="minimumSize">
+    <size>
+     <width>800</width>
+     <height>500</height>
+    </size>
+   </property>
+   <property name="maximumSize">
+    <size>
+     <width>16777215</width>
+     <height>16777215</height>
+    </size>
+   </property>
+   <layout class="QHBoxLayout" name="horizontalLayout">
+    <item>
+     <widget class="QTreeView" name="file_info">
+      <property name="minimumSize">
+       <size>
+        <width>100</width>
+        <height>500</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>350</width>
+        <height>16777215</height>
+       </size>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QMdiArea" name="widgets_area">
+      <property name="minimumSize">
+       <size>
+        <width>1060</width>
+        <height>676</height>
+       </size>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>800</width>
+     <height>33</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <addaction name="actionNew"/>
+    <addaction name="actionOpen_project"/>
+    <addaction name="actionSave_project"/>
+    <addaction name="actionSave_project_as"/>
+    <addaction name="actionQuit"/>
+   </widget>
+   <widget class="QMenu" name="menuInstruments">
+    <property name="title">
+     <string>Instruments</string>
+    </property>
+    <addaction name="actionCreate_new_gallery"/>
+    <addaction name="actionCreate_table"/>
+    <addaction name="actionData_export"/>
+   </widget>
+   <widget class="QMenu" name="menuGraphics">
+    <property name="title">
+     <string>Graphics</string>
+    </property>
+    <addaction name="actionLine_graph"/>
+    <addaction name="actionScatter_graph"/>
+   </widget>
+   <widget class="QMenu" name="menuHelp">
+    <property name="title">
+     <string>Help</string>
+    </property>
+    <addaction name="actionHelp"/>
+    <addaction name="actionAbout"/>
+   </widget>
+   <widget class="QMenu" name="menuData_acquisition">
+    <property name="title">
+     <string>Data acquisition</string>
+    </property>
+    <addaction name="actionIntensity_calculation"/>
+    <addaction name="actionExtinction_coefficient"/>
+    <addaction name="actionApproximation"/>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuInstruments"/>
+   <addaction name="menuData_acquisition"/>
+   <addaction name="menuGraphics"/>
+   <addaction name="menuHelp"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionNew">
+   <property name="text">
+    <string>New project</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+N</string>
+   </property>
+  </action>
+  <action name="actionOpen_project">
+   <property name="text">
+    <string>Open project</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+O</string>
+   </property>
+  </action>
+  <action name="actionSave_project">
+   <property name="text">
+    <string>Save project</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S</string>
+   </property>
+  </action>
+  <action name="actionSave_project_as">
+   <property name="text">
+    <string>Save project as...</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+S</string>
+   </property>
+  </action>
+  <action name="actionQuit">
+   <property name="text">
+    <string>Quit</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Q</string>
+   </property>
+  </action>
+  <action name="actionCreate_new_gallery">
+   <property name="text">
+    <string>Create new gallery</string>
+   </property>
+  </action>
+  <action name="actionDelete_gallery">
+   <property name="text">
+    <string>Delete gallery</string>
+   </property>
+  </action>
+  <action name="actionData_export">
+   <property name="text">
+    <string>Data export</string>
+   </property>
+  </action>
+  <action name="actionHelp">
+   <property name="text">
+    <string>Help</string>
+   </property>
+   <property name="shortcut">
+    <string>F8</string>
+   </property>
+  </action>
+  <action name="actionAbout">
+   <property name="text">
+    <string>About</string>
+   </property>
+  </action>
+  <action name="actionCreate_table">
+   <property name="text">
+    <string>Create table</string>
+   </property>
+  </action>
+  <action name="actionIntensity_calculation">
+   <property name="checkable">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Intensity calculation</string>
+   </property>
+  </action>
+  <action name="actionExtinction_coefficient">
+   <property name="text">
+    <string>Extinction coefficient</string>
+   </property>
+  </action>
+  <action name="actionApproximation">
+   <property name="text">
+    <string>Approximation</string>
+   </property>
+  </action>
+  <action name="actionLine_graph">
+   <property name="text">
+    <string>Line graph</string>
+   </property>
+  </action>
+  <action name="actionScatter_graph">
+   <property name="text">
+    <string>Scatter graph</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
