@@ -4,8 +4,9 @@ class WidgetsWindow(QtWidgets.QWidget):
     # Сигнал для уведомления MainWindow о закрытии окна
     window_closed = QtCore.pyqtSignal(object)
 
-    def __init__(self, name: str, parent=None):
+    def __init__(self, name: str, parent=None, idx: int | str = None):
         super().__init__(parent)
+        self.id = idx
         self.name = name
         self.setWindowTitle(name)
         self.force_close = False
