@@ -42,7 +42,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def create_gallery(self):
         gallery_name = f'Gallery_{self.gallery_count}'
-        gallery_window = GalleryWindow(gallery_name, parent=self)
+        gallery_window = GalleryWindow(idx=self.gallery_count, name=gallery_name, obj_type='gallery', linked=None, parent=self)
 
         sub = QMdiSubWindow()
         sub.setWidget(gallery_window)
