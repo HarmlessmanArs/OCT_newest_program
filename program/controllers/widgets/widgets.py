@@ -1,4 +1,5 @@
 from PyQt6 import QtWidgets, QtGui, QtCore
+from ...utils import LinkBase
 from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox, QMenu, QMdiArea, QMdiSubWindow
 from PyQt6.QtGui import QStandardItemModel, QStandardItem
 from PyQt6.QtCore import Qt
@@ -7,9 +8,8 @@ class WidgetsWindow(QtWidgets.QWidget):
     # Сигнал для уведомления MainWindow о закрытии окна
     window_closed = QtCore.pyqtSignal(object)
 
-    def __init__(self, name: str, parent=None, idx: int | str = None):
-        super().__init__(parent)
-        self.id = idx
+    def __init__(self, name = '', parent=None):
+        QtWidgets.QWidget.__init__(self, parent)
         self.name = name
         self.setWindowTitle(name)
         self.force_close = False

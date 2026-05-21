@@ -1,0 +1,1 @@
+from .link_base import LinkBase
