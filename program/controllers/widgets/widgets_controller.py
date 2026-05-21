@@ -17,7 +17,6 @@ class WidgetsWindow(LinkBase, QtWidgets.QWidget):
         self.setWindowTitle(new_name)
 
     def closeEvent(self, event: QtGui.QCloseEvent):
-
         reply = QtWidgets.QMessageBox.question(
             self, "Confirmation",
             f"Close window {self.obj_type} named {self.link_name}?",

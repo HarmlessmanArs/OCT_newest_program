@@ -42,15 +42,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def create_gallery(self):
         gallery_name = f'Gallery_{self.gallery_count}'
-        gallery_window = GalleryWindow(link_name=gallery_name, link_idx=1, obj_type='gallery', linked=None, parent=self)
-        # print(gallery_window.__dict__)
+        gallery_window = GalleryWindow(link_name=gallery_name,
+                                       link_idx=QtCore.QUuid.createUuid(),
+                                       obj_type='gallery',
+                                       linked=None,
+                                       parent=self)
+        print(gallery_window.__dict__)
         sub = QMdiSubWindow()
         sub.setWidget(gallery_window)
 
         self.widgets_area.addSubWindow(sub)
         sub.show()
 
-        # self.gallery_windows.append(gallery_window)
         self.gallery_count += 1
 
         #folder

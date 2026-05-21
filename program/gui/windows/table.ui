@@ -21,33 +21,7 @@
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <item row="0" column="0">
-    <widget class="QTableWidget" name="tableWidget">
-     <row>
-      <property name="text">
-       <string/>
-      </property>
-     </row>
-     <row>
-      <property name="text">
-       <string>Name</string>
-      </property>
-     </row>
-     <row>
-      <property name="text">
-       <string>Comments</string>
-      </property>
-     </row>
-     <column>
-      <property name="text">
-       <string>X</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Y</string>
-      </property>
-     </column>
-    </widget>
+    <widget class="QTableView" name="tableView"/>
    </item>
   </layout>
  </widget>
