@@ -1,2 +1,2 @@
 pyside6-designer
-pyuic6 main_window.ui -o ui_main_window.py
+pyuic6 [Filename_1].ui -o [File_name_2].py

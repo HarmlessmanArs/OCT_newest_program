@@ -3,16 +3,16 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox, QMenu, QMdiA
 from PyQt6.QtGui import QStandardItemModel, QStandardItem
 from PyQt6.QtCore import Qt
 from program.gui.windows import Ui_Form_gallery
-from .widgets import WidgetsWindow
+from .widgets_controller import WidgetsWindow
 
 
 class GalleryWindow(WidgetsWindow):
 
-    def __init__(self, name, parent=None):
-        super().__init__(name, parent)
+    def __init__(self, link_name, link_idx, obj_type, linked=None, parent=None):
+        super().__init__(link_name, link_idx, obj_type, linked, parent)
         self.setWindowFlag(Qt.WindowType.Window)
 
         self.ui = Ui_Form_gallery()
         self.ui.setupUi(self)
 
-        self.setWindowTitle(name)
+        self.setWindowTitle(link_name)

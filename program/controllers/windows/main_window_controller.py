@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox, QMenu, QMdiA
 from PyQt6.QtGui import QStandardItemModel, QStandardItem
 from PyQt6.QtCore import Qt
 from ...gui.windows import Ui_MainWindow
-from ..widgets.gallery_window import GalleryWindow
+from ..widgets.gallery_controller import GalleryWindow
 
 
 class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
@@ -42,8 +42,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def create_gallery(self):
         gallery_name = f'Gallery_{self.gallery_count}'
-        gallery_window = GalleryWindow(name=gallery_name, parent=self)
-
+        gallery_window = GalleryWindow(link_name=gallery_name, link_idx=1, obj_type='gallery', linked=None, parent=self)
+        # print(gallery_window.__dict__)
         sub = QMdiSubWindow()
         sub.setWidget(gallery_window)
 

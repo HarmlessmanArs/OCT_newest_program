@@ -1,8 +1,6 @@
 class LinkBase:
-    def __init__(self, link_name):
+    def __init__(self, link_name: str, link_idx: int, obj_type: str, linked: dict | None):
         self.link_name = link_name
-    # def __init__(self, idx: int, name: str, obj_type: str, linked: None | dict = None):
-    #     self.idx = idx
-    #     self.name = name
-    #     self.obj_type = obj_type
-    #     self.linked = linked
+        self.link_idx = link_idx
+        self.obj_type = obj_type
+        self.linked = linked

@@ -1,6 +1,6 @@
 import sys
 from PyQt6.QtWidgets import QApplication
-from program.controllers.windows.main_window import MainWindow
+from program.controllers.windows.main_window_controller import MainWindow
 
 
 def gui_main():

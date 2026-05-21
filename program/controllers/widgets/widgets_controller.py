@@ -4,28 +4,23 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox, QMenu, QMdiA
 from PyQt6.QtGui import QStandardItemModel, QStandardItem
 from PyQt6.QtCore import Qt
 
-class WidgetsWindow(QtWidgets.QWidget):
+class WidgetsWindow(LinkBase, QtWidgets.QWidget):
     # Сигнал для уведомления MainWindow о закрытии окна
     window_closed = QtCore.pyqtSignal(object)
 
-    def __init__(self, name = '', parent=None):
+    def __init__(self, link_name, link_idx, obj_type, linked=None, parent=None):
         QtWidgets.QWidget.__init__(self, parent)
-        self.name = name
-        self.setWindowTitle(name)
-        self.force_close = False
+        LinkBase.__init__(self, link_name, link_idx, obj_type, linked)
 
     def rename(self, new_name: str):
-        self.name = new_name
+        self.link_name = new_name
         self.setWindowTitle(new_name)
 
     def closeEvent(self, event: QtGui.QCloseEvent):
-        if self.force_close:
-            event.accept()
-            return
 
         reply = QtWidgets.QMessageBox.question(
-            self, "Подтверждение",
-            f"Закрыть окно '{self.name}'?",
+            self, "Confirmation",
+            f"Close window {self.obj_type} named {self.link_name}?",
             QtWidgets.QMessageBox.StandardButton.Yes |
             QtWidgets.QMessageBox.StandardButton.No |
             QtWidgets.QMessageBox.StandardButton.Ignore

@@ -1,10 +1,13 @@
-# OCT newest program
+# __OCT newest program__
 
-# What is this program for?
+# _What is this program for?_
 
-This program was made for OCT images processing
+This program was made for OCT images processing. It consits of different modules 
+such as boundaries detection and calculation of their positions and distinations between them.
+Additionaly this program allows to calculate average intensity and extinction corfficient in ROI. 
+Also, it was made to calculate geometrical and optical parameters in diffusion process 
 
-# Structure of the program
+# _Structure of the program_
 
 Program.py
 * app - 
@@ -20,6 +23,7 @@ Program.py
       * init.py
       * main_window.py
 * core - 
+  * roi_calculation.py
   * average_intensity_calculation.py
   * mu_t_calculation.py
   * boundaries_extraction.py
@@ -59,6 +63,7 @@ Program.py
 * state - 
   * project_state
     * init.py
+    * constants.py
   * dataset_state
     * init.py
     * gallery_state.py
@@ -70,15 +75,20 @@ Program.py
 * workers - 
   * init.py
 
-# Tasks (last updated 20.05.26)
+# _User path_
+
+
+
+# _Tasks (last updated 21.05.26)_
 
 1) Change QTableWidget in table module to QTableView + QAbstractTableModel
 2) Write mathematical modules for (crossed text means this task has been done):
-   1) boundaries extraction
-   2) boundaries calculation
-   3) average intensity
-   4) mu_t calculation
-   5) parameters calculation
+   1) ~~boundaries extraction~~
+   2) ~~boundaries calculation~~
+   3) ~~average intensity~~
+   4) roi calculation
+   5) ~~mu_t calculation~~
+   6) parameters calculation
       1) v1
       2) v2
       3) v3
