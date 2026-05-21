@@ -5,7 +5,7 @@ from .widgets_controller import WidgetsWindow
 
 class GraphWindow(WidgetsWindow):
 
-    def __init__(self, link_name, link_idx, obj_type, linked=None, parent=None):
+    def __init__(self, link_name, link_idx, obj_type='imaging boundaries', linked=None, parent=None):
         super().__init__(link_name, link_idx, obj_type, linked, parent)
         self.setWindowFlag(Qt.WindowType.Window)
 

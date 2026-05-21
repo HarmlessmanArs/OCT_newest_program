@@ -5,7 +5,7 @@
 This program was made for OCT images processing. It consits of different modules 
 such as boundaries detection and calculation of their positions and distinations between them.
 Additionaly this program allows to calculate average intensity and extinction corfficient in ROI. 
-Also, it was made to calculate geometrical and optical parameters in diffusion process 
+Also, it was made to calculate geometrical and optical parameters in diffusion process
 
 # _Structure of the program_
 
