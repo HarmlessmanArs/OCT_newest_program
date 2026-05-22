@@ -1,8 +1,6 @@
 from PyQt6 import QtWidgets, QtGui, QtCore
 from ...utils import LinkBase
-from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox, QMenu, QMdiArea, QMdiSubWindow
-from PyQt6.QtGui import QStandardItemModel, QStandardItem
-from PyQt6.QtCore import Qt
+
 
 class WidgetsWindow(LinkBase, QtWidgets.QWidget):
     # Сигнал для уведомления MainWindow о закрытии окна
@@ -12,11 +10,19 @@ class WidgetsWindow(LinkBase, QtWidgets.QWidget):
         QtWidgets.QWidget.__init__(self, parent)
         LinkBase.__init__(self, link_name, link_idx, obj_type, linked)
 
+        # НАСТРОЙКА: Флаг принудительного закрытия (без вызова QMessageBox)
+        self._force_close = False
+
     def rename(self, new_name: str):
         self.link_name = new_name
         self.setWindowTitle(new_name)
 
     def closeEvent(self, event: QtGui.QCloseEvent):
+        # Если удаление вызвано со стороны дерева — закрываем без лишних вопросов
+        if self._force_close:
+            event.accept()
+            return
+
         reply = QtWidgets.QMessageBox.question(
             self, "Confirmation",
             f"Close window {self.obj_type} named {self.link_name}?",
@@ -29,7 +35,6 @@ class WidgetsWindow(LinkBase, QtWidgets.QWidget):
             self.window_closed.emit(self)
             event.accept()
         elif reply == QtWidgets.QMessageBox.StandardButton.Ignore:
-            # "Игнорировать" в данном контексте используем как "Свернуть"
             event.ignore()
             if self.parent() and isinstance(self.parent(), QtWidgets.QMdiSubWindow):
                 self.parent().showMinimized()
