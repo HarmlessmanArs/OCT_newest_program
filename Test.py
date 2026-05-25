@@ -1,0 +1,3 @@
+import zarr
+
+help(zarr)

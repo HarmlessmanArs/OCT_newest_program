@@ -7,6 +7,14 @@ such as boundaries detection and calculation of their positions and distinations
 Additionaly this program allows to calculate average intensity and extinction corfficient in ROI. 
 Also, it was made to calculate geometrical and optical parameters in diffusion process
 
+# __How to run the code__
+### Libraries you need
+* numpy
+* cv2
+* PyQt6
+* pandas
+* sipy
+
 # _Structure of the program_
 
 Program.py
@@ -69,7 +77,13 @@ Program.py
     * saver.py
     * writer.py
   * lazy
+    * init.py
+    * laz_array
   * modules
+    * init.py
+    * base.py
+    * json_module.py
+    * numpy.module
 * services - 
   * init.py
 * state - the state of datasets and project itself
@@ -117,3 +131,9 @@ There will also be an option to load existing projects and continue working with
 или, наоборот, удаление из списка при удалении виджета
 5) Получается, папка как сущность тоже должна иметь idx для того, чтобы к ней можно было обратиться и свзаться с ней виджеты.
 Это должно помочь построить иерархию
+
+
+# _Bags_
+1) Если нет активных папок, то при создании галереи программа вылетает. Необходимо проверять, есть ли папка. В случае отсутствия
+ничего не делать или выдать сообщение о том, что необходимо создать папку
+2) 

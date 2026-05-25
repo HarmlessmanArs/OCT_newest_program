@@ -3,7 +3,7 @@ from program.gui.windows import Ui_Form_table
 from .widgets_controller import WidgetsWindow
 
 
-class GraphWindow(WidgetsWindow):
+class TableWindow(WidgetsWindow):
 
     def __init__(self, link_name, link_idx, obj_type='table', linked=None, parent=None):
         super().__init__(link_name, link_idx, obj_type, linked, parent)

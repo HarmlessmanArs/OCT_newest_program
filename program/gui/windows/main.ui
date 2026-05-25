@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>500</height>
+    <width>1058</width>
+    <height>848</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -38,8 +38,8 @@
      <height>16777215</height>
     </size>
    </property>
-   <layout class="QHBoxLayout" name="horizontalLayout">
-    <item>
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="0">
      <widget class="QTreeView" name="file_info">
       <property name="minimumSize">
        <size>
@@ -55,7 +55,7 @@
       </property>
      </widget>
     </item>
-    <item>
+    <item row="0" column="1">
      <widget class="QMdiArea" name="widgets_area">
       <property name="minimumSize">
        <size>
@@ -72,7 +72,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>800</width>
+     <width>1058</width>
      <height>33</height>
     </rect>
    </property>
@@ -123,6 +123,17 @@
    <addaction name="menuHelp"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
+  <widget class="QToolBar" name="bottoolBar">
+   <property name="windowTitle">
+    <string>toolBar</string>
+   </property>
+   <attribute name="toolBarArea">
+    <enum>BottomToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+  </widget>
   <action name="actionNew">
    <property name="text">
     <string>New project</string>

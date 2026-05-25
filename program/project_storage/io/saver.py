@@ -1,38 +1,21 @@
-from .writer import ZipWriter
+from pathlib import Path
+from PyQt6.QtCore import QThread, pyqtSignal
+from .writer import ProjectWriter
 
+class SaveProjectWorker(QThread):
+    """Поток для фонового сохранения проекта без зависания GUI PyQt6"""
+    finished = pyqtSignal(bool, str)  # (Успех: bool, Сообщение: str)
+    progress = pyqtSignal(int)        # Прогресс записи (0-100%)
 
-class ProjectSaver:
+    def __init__(self, target_path: str | Path, project_snapshot: dict):
+        super().__init__()
+        self.target_path = Path(target_path)
+        self.snapshot = project_snapshot
 
-    def __init__(self, registry):
-        self.registry = registry
-
-    def save(self, project, path):
-        writer = ZipWriter(path)
-
-        manifest = {
-            "version": project.version,
-            "datasets": []
-        }
-
-        for ds in project.datasets:
-            ds_entry = {
-                "id": ds.id,
-                "name": ds.name,
-                "blocks": []
-            }
-
-            for block in ds.blocks.values():
-                saver = self.registry.get_saver(block)
-                saver.save(block, writer)
-
-                ds_entry["blocks"].append({
-                    "name": block.name,
-                    "type": block.type,
-                    "path": block.handle.path,
-                    "loader": block.handle.loader_type
-                })
-
-            manifest["datasets"].append(ds_entry)
-
-        writer.write_json("manifest.json", manifest)
-        writer.close()
+    def run(self):
+        writer = ProjectWriter(self.target_path)
+        try:
+            writer.write(self.snapshot, progress_callback=self.progress.emit)
+            self.finished.emit(True, "Проект успешно сохранен!")
+        except Exception as e:
+            self.finished.emit(False, str(e))
