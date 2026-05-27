@@ -2,6 +2,7 @@ import zarr
 from zarr.storage import ZipStore
 import numpy as np
 from pathlib import Path
+import warnings  # Добавляем встроенный модуль для управления варнингами
 
 
 class ProjectWriter:
@@ -19,34 +20,45 @@ class ProjectWriter:
         store = None
 
         try:
-            # В Zarr 3.x ZipStore находится в подмодуле zarr.storage
-            store = ZipStore(str(tmp_path), mode='w')
+            # Включаем локальный фильтр предупреждений на время сборки архива
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    category=UserWarning,
+                    message=".*Duplicate name:.*zarr.json.*"
+                )
 
-            # Открываем корневую группу через верхнеуровневый API Zarr 3
-            root = zarr.open_group(store=store)
+                # В Zarr 3.x ZipStore находится в подмодуле zarr.storage
+                store = ZipStore(str(tmp_path), mode='w')
 
-            # 1. Глобальные метаданные проекта и скелет QTreeWidget
-            root.attrs['project_meta'] = snapshot.get('project_meta', {})
-            root.attrs['tree_structure'] = snapshot.get('tree_structure', {})
+                # Открываем корневую группу через верхнеуровневый API Zarr 3
+                root = zarr.open_group(store=store)
 
-            # 2. Запись датаблоков (datablocks)
-            blocks_data = snapshot.get('blocks', {})
+                # ФИКС: Объединяем запись метаданных в один пакет через .update(),
+                # чтобы Zarr не дергал zarr.json по нескольку раз подряд.
+                root.attrs.update({
+                    'project_meta': snapshot.get('project_meta', {}),
+                    'tree_structure': snapshot.get('tree_structure', {})
+                })
 
-            # Так как мы пишем пустой ZIP с нуля, используем исключительно create_group
-            blocks_group = root.create_group('blocks')
+                # 2. Запись датаблоков (datablocks)
+                blocks_data = snapshot.get('blocks', {})
 
-            total_blocks = len(blocks_data)
-            for idx, (block_uuid, block_content) in enumerate(blocks_data.items()):
-                self._write_datablock(blocks_group, str(block_uuid), block_content)
+                # Так как мы пишем пустой ZIP с нуля, используем исключительно create_group
+                blocks_group = root.create_group('blocks')
 
-                if progress_callback:
-                    progress_callback(int(((idx + 1) / max(total_blocks, 1)) * 100))
+                total_blocks = len(blocks_data)
+                for idx, (block_uuid, block_content) in enumerate(blocks_data.items()):
+                    self._write_datablock(blocks_group, str(block_uuid), block_content)
 
-            # КРИТИЧЕСКИ ВАЖНО для Zarr 3.x: явно закрываем ZipStore,
-            # чтобы финализировать ZIP-структуру на жестком диске!
-            store.close()
+                    if progress_callback:
+                        progress_callback(int(((idx + 1) / max(total_blocks, 1)) * 100))
 
-            # 3. Атомарная замена файла на диске
+                # КРИТИЧЕСКИ ВАЖНО для Zarr 3.x: явно закрываем ZipStore,
+                # чтобы финализировать ZIP-структуру на жестком диске!
+                store.close()
+
+            # 3. Атомарная замена файла на диске (вынесена из-под фильтра варнингов)
             if self.target_path.exists():
                 self.target_path.unlink()
             tmp_path.rename(self.target_path)
@@ -62,9 +74,11 @@ class ProjectWriter:
         """Запись отдельного Datablock со всей внутренней иерархией"""
         block_group = parent_group.create_group(block_uuid)
 
-        # Запись текстовой информации и особенностей объекта в атрибуты группы
-        block_group.attrs['metadata'] = content.get('metadata', {})
-        block_group.attrs['data_information'] = content.get('data_information', {})
+        # ФИКС: Здесь также уходим от двойного вызова записи метаданных
+        block_group.attrs.update({
+            'metadata': content.get('metadata', {}),
+            'data_information': content.get('data_information', {})
+        })
 
         # --- Визуальные категории (Каналы отображения ОКТ) ---
         visual_categories = ['original_images', 'boundaries_images', 'mu_t_images', 'tables']
@@ -132,7 +146,7 @@ class ProjectWriter:
             # Для 1D векторов отдаем автоматический расчет чанков на усмотрение Zarr 3
             chunks = None
 
-            # Используем легитимный метод create_array.
+        # Используем легитимный метод create_array.
         # Передавать строковый тип dtype безопаснее для внутренней валидации Zarr 3.
         parent_group.create_array(
             name=name,

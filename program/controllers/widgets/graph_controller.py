@@ -5,8 +5,8 @@ from .widgets_controller import WidgetsWindow
 
 class GraphWindow(WidgetsWindow):
 
-    def __init__(self, link_name, link_idx, obj_type='graph', linked=None, parent=None):
-        super().__init__(link_name, link_idx, obj_type, linked, parent)
+    def __init__(self, link_name, link_idx, obj_type='graph', state=None, linked=None, parent=None):
+        super().__init__(link_name, link_idx, obj_type, state, linked, parent)
         self.setWindowFlag(Qt.WindowType.Window)
 
         self.ui = Ui_Form_graph()

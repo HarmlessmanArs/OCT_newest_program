@@ -6,12 +6,12 @@ import json
 
 
 def _config_dir() -> Path:
-    base = Path.home() / "OCT_program"
+    base = Path.home() / "OCT project"
     base.mkdir(parents=True, exist_ok=True)
     return base
 
 
-SETTINGS_FILE = _config_dir() / "settings.json"
+SETTINGS_FILE = _config_dir() / "paths.json"
 
 
 @dataclass

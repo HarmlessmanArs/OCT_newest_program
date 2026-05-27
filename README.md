@@ -1,5 +1,14 @@
 # __OCT newest program__
 
+# CONTENT
+
+1) What is this program for?
+2) How to run the code
+3) Structure of the program
+4) User path
+5) Tasks
+6) Bugs
+
 # _What is this program for?_
 
 This program was made for OCT images processing. It consits of different modules 
@@ -8,12 +17,15 @@ Additionaly this program allows to calculate average intensity and extinction co
 Also, it was made to calculate geometrical and optical parameters in diffusion process
 
 # __How to run the code__
+### Python version
+* Python 3.13
 ### Libraries you need
-* numpy
-* cv2
-* PyQt6
-* pandas
-* sipy
+* numpy (2.4.6)
+* cv2 (4.12.0.88)
+* PyQt6 (6.11.0)
+* pandas (2.3.3)
+* scipy (1.17.1)
+* zarr (3.1.2)
 
 # _Structure of the program_
 
@@ -23,6 +35,7 @@ Program.py
     * main.py
 * controllers - here are described how program responses to user 
     * init.py
+    * small_controllers.py
     * widgets
       * init.py
       * widgets.py
@@ -36,6 +49,11 @@ Program.py
     * windows
       * init.py
       * main_window_controller.py
+      * add_controllers
+        * init.py
+        * hierarchy_controller.py
+        * project_io_controller.py
+        * widget_factory_controller.py
     * addtional_windows
       * init.py
       * addtional_windows_conroller.py
@@ -56,11 +74,20 @@ Program.py
 * gui - how windows look
   * init.py
   * windows
-    * Different classes of windows
+    * init.py
+    * ui_gallery_window.py
+    * ui_graphic_window.py
+    * ui_imaging_av_int_window.py
+    * ui_imaging_boundaries_window.py
+    * ui_imaging_mu_t_window.py
+    * ui_imaging_roi_window.py
+    * ui_main_window.py
+    * ui_table_window.py
   * dialogs
-    * Different classes for dialogs windows
+    * init.py
   * additional_windows
-    * Different classes for additional windows
+    * init.py
+    * ui_data_info.py
 * projects_storage - how to save, open or create project
   * init.py
   * registory.py
@@ -90,6 +117,7 @@ Program.py
   * project_state
     * init.py
     * constants.py
+    * state.py
   * dataset_state
     * init.py
     * gallery_state.py
@@ -98,6 +126,7 @@ Program.py
   * link_base.py
   * logging.py
   * paths.py
+  * types_restore.py
 * workers - functions which works on background not to block main window 
   * init.py
 
@@ -111,11 +140,11 @@ to continue data processing.
 
 There will also be an option to load existing projects and continue working within the loaded project.
 
-# _Tasks (last updated 21.05.26)_
+# _Tasks (last updated 27.05.26)_
 
 1) Change ~~QTableWidget~~ in table module to QTableView + QAbstractTableModel
 2) Write mathematical modules for (crossed text means this task has been done):
-   1) ~~boundaries extraction~~
+   1) ~~boundaries extraction~~ need changes in logic
    2) ~~boundaries calculation~~
    3) ~~average intensity~~
    4) roi calculation
@@ -124,13 +153,11 @@ There will also be an option to load existing projects and continue working with
       1) v1
       2) v2
       3) v3
-3) В главном окне есть поле QTreeWidget, в котором хранится структура проект: папки, в котрых находятся различные виджеты.
-Нужно сделать так, чтобы при выборе конкрентной папки отображались только виджеты, которые связаны только с ней (галереи,
-таблицы, графики и т.д.)
-4) В дополнении к прошлому пункту необходимо добавть такую важную функцию как удаление виджета, если его удалили из списка 
-или, наоборот, удаление из списка при удалении виджета
-5) Получается, папка как сущность тоже должна иметь idx для того, чтобы к ней можно было обратиться и свзаться с ней виджеты.
-Это должно помочь построить иерархию
+3) В дополнении к прошлому пункту необходимо добавть такую важную функцию как удаление виджета, если его удалили из списка 
+или, наоборот, удаление из списка при удалении виджета (выполнено чавстично, при удалении непоредственно виджета 
+запись о нём остаётся в дереве)
+4) Добить созранение и загрузку проекта (пока встречается такая проблема, что при загрузке проекта не подгружается состояние
+проекта, а также все окна, которые были в "старом" проекте остаются)
 
 
 # _Bags_

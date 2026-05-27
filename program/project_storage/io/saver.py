@@ -1,11 +1,36 @@
+import copy
 from pathlib import Path
-from PyQt6.QtCore import QThread, pyqtSignal
+import numpy as np
+from PyQt6.QtCore import QThread, pyqtSignal, QUuid
 from .writer import ProjectWriter
+
+
+def sanitize_snapshot(obj):
+    """
+    Рекурсивно очищает снимок проекта от специфичных типов данных (QUuid, Path, NumPy),
+    превращая их в стандартные примитивы Python для безопасного сохранения в JSON/Zarr.
+    """
+    if isinstance(obj, dict):
+        return {str(k): sanitize_snapshot(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple, set)):
+        return [sanitize_snapshot(item) for item in obj]
+    elif isinstance(obj, QUuid):
+        return obj.toString()
+    elif isinstance(obj, Path):
+        return str(obj)
+    elif isinstance(obj, (np.integer, np.int32, np.int64)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float32, np.float64)):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
+
 
 class SaveProjectWorker(QThread):
     """Поток для фонового сохранения проекта без зависания GUI PyQt6"""
     finished = pyqtSignal(bool, str)  # (Успех: bool, Сообщение: str)
-    progress = pyqtSignal(int)        # Прогресс записи (0-100%)
+    progress = pyqtSignal(int)  # Прогресс записи (0-100%)
 
     def __init__(self, target_path: str | Path, project_snapshot: dict):
         super().__init__()
@@ -13,9 +38,19 @@ class SaveProjectWorker(QThread):
         self.snapshot = project_snapshot
 
     def run(self):
-        writer = ProjectWriter(self.target_path)
         try:
-            writer.write(self.snapshot, progress_callback=self.progress.emit)
-            self.finished.emit(True, "Проект успешно сохранен!")
+            # 1. Фикс 'cannot pickle': глубокая очистка данных от Qt-объектов перед отправкой в Zarr
+            clean_snapshot = sanitize_snapshot(self.snapshot)
+
+            # 2. Фикс 'Duplicate name': если файл уже существует, жестко удаляем его.
+            # Это гарантирует, что ZipStore создаст новый чистый архив без накопления дубликатов 'zarr.json'.
+            if self.target_path.exists():
+                self.target_path.unlink(missing_ok=True)
+
+            # 3. Инициализируем оригинальный писатель и передаем ему "стерильные" данные
+            writer = ProjectWriter(self.target_path)
+            writer.write(clean_snapshot, progress_callback=self.progress.emit)
+
+            self.finished.emit(True, "Project saved completely!")
         except Exception as e:
             self.finished.emit(False, str(e))
