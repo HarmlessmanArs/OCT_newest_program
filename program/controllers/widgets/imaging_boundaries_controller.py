@@ -3,7 +3,7 @@ from program.gui.windows import Ui_Form_img_bound
 from .widgets_controller import WidgetsWindow
 
 
-class GraphWindow(WidgetsWindow):
+class ImagingBoundariesWindow(WidgetsWindow):
 
     def __init__(self, link_name, link_idx, obj_type='imaging boundaries', state=None, linked=None, parent=None):
         super().__init__(link_name, link_idx, obj_type, state, linked, parent)

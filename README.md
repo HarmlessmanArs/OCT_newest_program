@@ -36,6 +36,7 @@ Program.py
 * controllers - here are described how program responses to user 
     * init.py
     * small_controllers.py
+    * workspace_controller.py
     * widgets
       * init.py
       * widgets.py
@@ -90,7 +91,6 @@ Program.py
     * ui_data_info.py
 * projects_storage - how to save, open or create project
   * init.py
-  * registory.py
   * core
     * init.py
     * datablock.py
@@ -106,11 +106,6 @@ Program.py
   * lazy
     * init.py
     * laz_array
-  * modules
-    * init.py
-    * base.py
-    * json_module.py
-    * numpy.module
 * services - 
   * init.py
 * state - the state of datasets and project itself
@@ -118,6 +113,7 @@ Program.py
     * init.py
     * constants.py
     * state.py
+    * runtime_registry
   * dataset_state
     * init.py
     * gallery_state.py
@@ -140,7 +136,7 @@ to continue data processing.
 
 There will also be an option to load existing projects and continue working within the loaded project.
 
-# _Tasks (last updated 27.05.26)_
+# _Tasks (last updated 28.05.26)_
 
 1) Change ~~QTableWidget~~ in table module to QTableView + QAbstractTableModel
 2) Write mathematical modules for (crossed text means this task has been done):
@@ -158,6 +154,7 @@ There will also be an option to load existing projects and continue working with
 запись о нём остаётся в дереве)
 4) Добить созранение и загрузку проекта (пока встречается такая проблема, что при загрузке проекта не подгружается состояние
 проекта, а также все окна, которые были в "старом" проекте остаются)
+
 
 
 # _Bags_

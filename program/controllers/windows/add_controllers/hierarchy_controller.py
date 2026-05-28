@@ -2,10 +2,15 @@ from PyQt6 import QtWidgets, QtCore
 from PyQt6.QtWidgets import QMenu
 from PyQt6.QtGui import QStandardItem
 from PyQt6.QtCore import Qt, QObject, QUuid
-from ...small_controllers import TreeRoles
+from ....state.project_state.constants import WidgetTypes
+
 
 class HierarchyController(QObject):
-    """Управляет реакцией дерева, контекстными меню, фильтрацией MDI и удалениями."""
+    """
+    Управляет реакцией дерева, контекстными меню, фильтрацией MDI и удалениями.
+    Использует State-driven подход и единый пайплайн удаления (Этап 9).
+    """
+
     def __init__(self, main_window, project_state):
         super().__init__(main_window)
         self.win = main_window
@@ -32,31 +37,46 @@ class HierarchyController(QObject):
         elif action == create_table_action:
             self.win.widget_factory.create_table()
 
+    # =========================================================================
+    # СИНХРОНИЗАЦИЯ ВИДИМОСТИ ОКОН (State-driven)
+    # =========================================================================
+
     def on_selection_changed(self, selected, deselected):
+        """Срабатывает при клике на элемент дерева."""
         indexes = self.win.file_info.selectedIndexes()
         if not indexes:
             self.ensure_active_folder_selection()
             return
 
         item = self.win.tree_model.itemFromIndex(indexes[0])
-        obj = item.data(TreeRoles.ObjectData)
+        uuid_str = item.data(Qt.ItemDataRole.UserRole)
 
-        if obj and getattr(obj, 'obj_type', None) == 'folder':
-            active_folder_idx = obj.link_idx
+        if not uuid_str:
+            return
+
+        # Проверяем по State: это виджет или папка?
+        widgets_dict = self.state.project_data.get("widgets", {})
+
+        if uuid_str in widgets_dict:
+            # Кликнули на виджет -> берем UUID его родительской папки
+            active_folder_uuid = widgets_dict[uuid_str].get("parent_block_uuid")
         else:
-            parent_item = item.parent()
-            if parent_item:
-                active_folder_idx = parent_item.data(TreeRoles.ObjectData).link_idx
-            else:
-                return
+            # Кликнули на папку -> она и есть активный контекст
+            active_folder_uuid = uuid_str
 
-        self.update_widgets_visibility(active_folder_idx)
+        if active_folder_uuid:
+            self.update_widgets_visibility(active_folder_uuid)
 
-    def update_widgets_visibility(self, folder_idx: QtCore.QUuid):
-        for sub_window in self.win.widgets_area.subWindowList():
-            widget = sub_window.widget()
-            if widget and hasattr(widget, 'linked'):
-                if widget.linked == folder_idx:
+    def update_widgets_visibility(self, folder_uuid: str):
+        """Управляет видимостью окон MDI на основе активной папки (UUID)."""
+        widgets_dict = self.state.project_data.get("widgets", {})
+
+        for w_uuid, descriptor in widgets_dict.items():
+            # Запрашиваем живое MDI-окно из нашего нового Runtime Registry
+            sub_window = self.win.runtime_registry.get_sub_window(w_uuid)
+            if sub_window:
+                # Если родитель окна совпадает с выбранной папкой — показываем
+                if descriptor.get("parent_block_uuid") == folder_uuid:
                     sub_window.show()
                 else:
                     sub_window.hide()
@@ -65,10 +85,15 @@ class HierarchyController(QObject):
         root = self.win.tree_model.invisibleRootItem()
         first_folder_item = None
 
+        # Собираем UUID всех папок из честного State
+        folder_uuids = {f["uuid"] for f in self.state.project_data.get("hierarchy", []) if
+                        f["type"] == WidgetTypes.FOLDER}
+
         for row in range(root.rowCount()):
             child = root.child(row)
-            c_obj = child.data(TreeRoles.ObjectData)
-            if c_obj and getattr(c_obj, 'obj_type', None) == 'folder':
+            uuid_str = child.data(Qt.ItemDataRole.UserRole)
+            # ТЕПЕРЬ ПРОВЕРКА СТРОГАЯ:
+            if uuid_str in folder_uuids:
                 first_folder_item = child
                 break
 
@@ -78,28 +103,66 @@ class HierarchyController(QObject):
         new_idx = self.win.tree_model.indexFromItem(first_folder_item)
         self.win.file_info.setCurrentIndex(new_idx)
 
+    # =========================================================================
+    # ПЕРЕИМЕНОВАНИЕ (Синхронизация UI -> State)
+    # =========================================================================
+
     def on_item_changed(self, item: QStandardItem):
-        obj = item.data(TreeRoles.ObjectData)
-        if obj is None:
+        """Срабатывает при ручном переименовании элемента в QTreeView."""
+        uuid_str = item.data(Qt.ItemDataRole.UserRole)
+        if not uuid_str:
             return
+
         new_name = item.text()
         self.win.tree_model.blockSignals(True)
+
         try:
-            if obj.obj_type == 'folder':
-                obj.link_name = new_name
-            else:
-                if hasattr(obj, 'rename'):
-                    obj.rename(new_name)
-                elif hasattr(obj, 'link_name'):
-                    obj.link_name = new_name
-                sub_window = item.data(TreeRoles.MdiSubWindow)
+            widgets_dict = self.state.project_data.get("widgets", {})
+            if uuid_str in widgets_dict:
+                # 1. Обновляем имя в дескрипторе State
+                self.state.update_widget_settings(uuid_str, {})  # триггерит modified=True
+                widgets_dict[uuid_str]["title"] = new_name
+
+                # 2. Обновляем заголовок живого MDI-окна через Registry
+                sub_window = self.win.runtime_registry.get_sub_window(uuid_str)
                 if sub_window:
                     sub_window.setWindowTitle(new_name)
+            else:
+                # Это папка, обновляем её в иерархии (Этап 3)
+                for folder in self.state.project_data.get("hierarchy", []):
+                    if folder["uuid"] == uuid_str:
+                        folder["text"] = new_name
+                        self.state.set_modified(True)
+                        break
         finally:
             self.win.tree_model.blockSignals(False)
 
-    def on_widget_window_closed(self, widget_obj):
-        item = self.find_item_by_idx(widget_obj.link_idx)
+    # =========================================================================
+    # ЭТАП 9 — ЕДИНЫЙ PIPELINE УДАЛЕНИЯ ОБЪЕКТОВ
+    # =========================================================================
+
+    def execute_deletion_pipeline(self, uuid_str: str):
+        """
+        Централизованный конвейер уничтожения объектов.
+        Удаляет сущность отовсюду синхронно и безопасно.
+        """
+        # --- Шаг 1. Delete from State ---
+        is_widget = uuid_str in self.state.project_data.get("widgets", {})
+        if is_widget:
+            self.state.remove_widget_descriptor(uuid_str)
+        else:
+            # Удаление папки из hierarchy данных
+            self.state.project_data["hierarchy"] = [
+                f for f in self.state.project_data.get("hierarchy", []) if f["uuid"] != uuid_str
+            ]
+            self.state.set_modified(True)
+
+        # --- Шаг 2, 4, 5. Delete Runtime Widget, MDI Window & Cleanup Registry ---
+        # Наш новый RuntimeRegistry делает всю эту магию одной командой!
+        self.win.runtime_registry.unregister_and_destroy(uuid_str)
+
+        # --- Шаг 3. Remove Tree Item ---
+        item = self.find_item_by_uuid(uuid_str)
         if item:
             parent = item.parent()
             if parent:
@@ -107,34 +170,35 @@ class HierarchyController(QObject):
             else:
                 self.win.tree_model.removeRow(item.row())
 
-    def find_item_by_idx(self, link_idx: QtCore.QUuid, parent_item=None) -> QStandardItem | None:
-        if parent_item is None:
-            parent_item = self.win.tree_model.invisibleRootItem()
-
-        for row in range(parent_item.rowCount()):
-            item = parent_item.child(row)
-            obj = item.data(TreeRoles.ObjectData)
-            if obj and hasattr(obj, 'link_idx') and obj.link_idx == link_idx:
-                return item
-            found = self.find_item_by_idx(link_idx, item)
-            if found:
-                return found
-        return None
+    def on_widget_window_closed(self, widget_obj):
+        """Каллбэк, срабатывающий при ручном закрытии окна крестиком."""
+        # Вытаскиваем строковый UUID, который виджет хранит у себя
+        uuid_attr = getattr(widget_obj, 'link_idx', None) or getattr(widget_obj, 'uuid', None)
+        if uuid_attr:
+            uuid_str = str(uuid_attr)
+            # Запускаем конвейер удаления
+            self.execute_deletion_pipeline(uuid_str)
 
     def on_delete_shortcut_triggered(self):
+        """Срабатывает по горячей клавише Delete на дереве."""
         selected_indexes = self.win.file_info.selectedIndexes()
         if not selected_indexes:
             return
         item = self.win.tree_model.itemFromIndex(selected_indexes[0])
         if item:
-            self.remove_item_safely(item)
+            self.ask_and_remove_item(item)
 
-    def remove_item_safely(self, item: QStandardItem):
-        obj = item.data(TreeRoles.ObjectData)
-        if obj is None:
+    def ask_and_remove_item(self, item: QStandardItem):
+        """Запрашивает подтверждение и запускает очистку."""
+        uuid_str = item.data(Qt.ItemDataRole.UserRole)
+        if not uuid_str:
             return
 
-        if obj.obj_type == 'folder':
+        # is_widget = uuid_str in self.state.project_data.get("widgets", {})
+        is_folder = any(f["uuid"] == uuid_str and f["type"] == WidgetTypes.FOLDER for f in
+                        self.state.project_data.get("hierarchy", []))
+        if is_folder:
+            # Удаление папки
             reply = QtWidgets.QMessageBox.question(
                 self.win, "Confirmation", f"Delete folder '{item.text()}' and all its widgets?",
                 QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No
@@ -142,41 +206,41 @@ class HierarchyController(QObject):
             if reply != QtWidgets.QMessageBox.StandardButton.Yes:
                 return
 
+            # Сначала каскадно удаляем все вложенные виджеты через пайплайн
             while item.rowCount() > 0:
-                self.remove_single_widget_item(item.child(0))
+                child_item = item.child(0)
+                child_uuid = child_item.data(Qt.ItemDataRole.UserRole)
+                if child_uuid:
+                    self.execute_deletion_pipeline(child_uuid)
 
-            parent = item.parent()
-            if parent:
-                parent.removeRow(item.row())
-            else:
-                self.win.tree_model.removeRow(item.row())
+            # Теперь удаляем саму папку
+            self.execute_deletion_pipeline(uuid_str)
         else:
+            # Удаление одиночного виджета
             reply = QtWidgets.QMessageBox.question(
                 self.win, "Confirmation", f"Delete widget '{item.text()}'?",
                 QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No
             )
             if reply == QtWidgets.QMessageBox.StandardButton.Yes:
-                self.remove_single_widget_item(item)
+                self.execute_deletion_pipeline(uuid_str)
 
-    def remove_single_widget_item(self, item: QStandardItem):
-        widget_obj = item.data(TreeRoles.ObjectData)
-        sub_window = item.data(TreeRoles.MdiSubWindow)
+    # =========================================================================
+    # ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ПОИСКА
+    # =========================================================================
 
-        if widget_obj:
-            try:
-                widget_obj.window_closed.disconnect(self.on_widget_window_closed)
-            except TypeError:
-                pass
-            widget_obj._force_close = True
+    def find_item_by_uuid(self, uuid_str: str, parent_item=None) -> QStandardItem | None:
+        """Рекурсивно ищет элемент в QTreeView по строковому UUID."""
+        if parent_item is None:
+            parent_item = self.win.tree_model.invisibleRootItem()
 
-        if sub_window:
-            sub_window.close()
-            sub_window.deleteLater()
-        if widget_obj:
-            widget_obj.deleteLater()
+        for row in range(parent_item.rowCount()):
+            item = parent_item.child(row)
+            item_uuid = item.data(Qt.ItemDataRole.UserRole)
 
-        parent = item.parent()
-        if parent:
-            parent.removeRow(item.row())
-        else:
-            self.win.tree_model.removeRow(item.row())
+            if item_uuid and str(item_uuid) == str(uuid_str):
+                return item
+
+            found = self.find_item_by_uuid(uuid_str, item)
+            if found:
+                return found
+        return None

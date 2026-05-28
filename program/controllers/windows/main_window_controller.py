@@ -1,4 +1,4 @@
-from PyQt6 import QtWidgets, QtCore
+from PyQt6 import QtWidgets
 from PyQt6.QtGui import QStandardItemModel, QStandardItem, QKeySequence, QAction
 from PyQt6.QtCore import Qt
 
@@ -62,14 +62,30 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         marker = " *" if self.project_state.modified else ""
         self.setWindowTitle(f"[{project_name}]{marker} — {self.app_name}")
 
+    def _clear_mdi_area_safely(self):
+        """
+        Безопасно уничтожает MDI окна, временно отключая сигналы закрытия,
+        чтобы предотвратить лавинообразные рекурсивные вызовы в контроллерах.
+        """
+        for sub_window in self.widgets_area.subWindowList():
+            widget = sub_window.widget()
+            if widget and hasattr(widget, 'window_closed'):
+                try:
+                    # Отключаем обработчики, чтобы контроллеры не паниковали при зачистке
+                    widget.window_closed.disconnect()
+                except TypeError:
+                    pass  # Сигнал не был подключен, игнорируем
+
+            sub_window.close()
+            sub_window.deleteLater()
+
     def _on_project_reset(self):
         """Вызывается при полной очистке/создании нового проекта."""
         self.tree_model.clear()
         self.tree_model.setHorizontalHeaderLabels(["Project Files"])
 
-        for sub_window in self.widgets_area.subWindowList():
-            sub_window.close()
-            sub_window.deleteLater()
+        # Безопасная очистка окон
+        self._clear_mdi_area_safely()
 
         self.folder_count = 1
         self.gallery_count = 1
@@ -86,23 +102,19 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.statusBar().showMessage("Обновление интерфейса...")
 
-        # 1. Блокируем сигналы представления на время пересборки модели
+        # Блокируем сигналы самого View и MDI-зоны на время жесткой перестройки
         self.file_info.blockSignals(True)
+        self.widgets_area.blockSignals(True)
 
         try:
-            # 2. Очищаем старую модель дерева
+            # 1. Очищаем старую визуальную модель дерева
             self.tree_model.clear()
             self.tree_model.setHorizontalHeaderLabels(["Project Files"])
 
-            # 3. Безопасно уничтожаем все старые окна в MDI-зоне
-            for sub_window in self.widgets_area.subWindowList():
-                sub_window.close()
-                sub_window.deleteLater()
+            # 2. Безопасно уничтожаем окна без вызова побочных эффектов
+            self._clear_mdi_area_safely()
 
-            # 4. Очищаем центральный словарь тегов в CONSTANTS (если используете)
-            # CONSTANTS.TAG_DICTIONARY.clear()
-
-            # 5. Извлекаем структуру проекта из синхронизированного State
+            # 3. Извлекаем структуру проекта из синхронизированного State
             project_data = self.project_state.project_data
             tree_structure = project_data.get('tree_structure', {})
 
@@ -110,14 +122,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.statusBar().showMessage("Открыт пустой проект", 5000)
                 return
 
-            # 6. Запускаем рекурсивное построение через QStandardItem
+            # 4. Запускаем рекурсивное построение и материализацию
             root_item = self.tree_model.invisibleRootItem()
             self._build_tree_nodes_recursive(root_item, tree_structure)
 
-            # Раскрываем все узлы дерева (у QTreeView этот метод вызывается на самом View)
+            # Раскрываем все узлы дерева
             self.file_info.expandAll()
 
-            # 7. Обновляем заголовок окна
+            # 5. Обновляем заголовок окна
             self._update_window_title()
             self.statusBar().showMessage("Интерфейс успешно восстановлен", 5000)
 
@@ -126,40 +138,45 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             raise RuntimeError(f"Сбой rebuild_interface: {str(e)}")
 
         finally:
-            # Гарантированно возвращаем обработку сигналов представлению
+            # Гарантированно возвращаем обработку сигналов интерфейсу
             self.file_info.blockSignals(False)
+            self.widgets_area.blockSignals(False)
 
     def _build_tree_nodes_recursive(self, parent_item, nodes_data: list | dict):
         """
-        Рекурсивно обходит структуру tree_structure и наполняет QStandardItemModel.
+        Рекурсивно строит иерархию интерфейса.
+        Разделяет папки и функциональные окна анализа, делегируя сборку окон фабрике.
         """
-        items_list = nodes_data if isinstance(nodes_data, list) else nodes_data.get('children', [])
+        # Если пришел список узлов (например, содержимое папки)
+        if isinstance(nodes_data, list):
+            for node in nodes_data:
+                self._build_tree_nodes_recursive(parent_item, node)
+            return
 
-        if not items_list:
-            if isinstance(nodes_data, dict) and 'text' in nodes_data:
-                items_list = [nodes_data]
-            else:
-                return
+        # Если пришел конкретный узел
+        if isinstance(nodes_data, dict):
+            node_uuid = nodes_data.get('uuid')
+            node_text = nodes_data.get('text', 'Без названия')
+            node_type = nodes_data.get('type')  # 'folder' или типы из WidgetTypes
 
-        for item_data in items_list:
-            node_text = item_data.get('text', 'Без названия')
+            # Если узел является окном анализа (не папка)
+            if node_type and node_type != 'folder':
+                widgets_dict = self.project_state.project_data.get("widgets", {})
+                descriptor = widgets_dict.get(node_uuid)
 
-            # Создаем элемент модели QStandardItem вместо QTreeWidgetItem
+                if descriptor:
+                    # Фабрика сама создаст и окно, и элемент дерева QStandardItem,
+                    # и правильно свяжет их с Single Source of Truth!
+                    self.widget_factory.restore_window_from_descriptor(descriptor, parent_item)
+                    return  # Прерываем ветку, фабрика сделала всё за нас
+
+            # Если узел — это папка (или корневая структура)
             tree_item = QStandardItem(node_text)
-
-            # Извлекаем восстановленный QUuid
-            node_uuid = item_data.get('uuid')
-
             if node_uuid:
-                # Кладем QUuid в UserRole (работает идентично для всех элементов Qt)
                 tree_item.setData(node_uuid, Qt.ItemDataRole.UserRole)
 
-                # РЕГИСТРАЦИЯ В СИСТЕМЕ ТЕГОВ:
-                # CONSTANTS.TAG_DICTIONARY[node_uuid] = tree_item
-
-            # Добавляем созданный элемент к текущему родителю
             parent_item.appendRow(tree_item)
 
-            # Рекурсивный спуск к дочерним элементам
-            if 'children' in item_data:
-                self._build_tree_nodes_recursive(tree_item, item_data['children'])
+            # Если у папки есть вложенные элементы, спускаемся глубже
+            if 'children' in nodes_data:
+                self._build_tree_nodes_recursive(tree_item, nodes_data['children'])

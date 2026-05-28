@@ -3,7 +3,7 @@ from program.gui.windows import Ui_Form_img_av_int
 from .widgets_controller import WidgetsWindow
 
 
-class GraphWindow(WidgetsWindow):
+class ImagingAvIntWindow(WidgetsWindow):
 
     def __init__(self, link_name, link_idx, obj_type='imaging av int', state=None, linked=None, parent=None):
         super().__init__(link_name, link_idx, obj_type, state, linked, parent)
