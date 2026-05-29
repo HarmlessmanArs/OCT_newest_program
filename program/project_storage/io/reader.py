@@ -17,28 +17,43 @@ class ProjectReader:
 
     def open(self):
         """Открывает ZipStore архива на чтение."""
+        print(f"  [DEBUG READER] Открытие файла на чтение: {self.file_path}")
         self.store = ZipStore(str(self.file_path), mode='r')
         self.root = zarr.open_group(store=self.store, mode='r')
+        print(f"  [DEBUG READER] ZipStore успешно открыт. Группы в корне: {list(self.root.keys())}")
 
     def get_structure_and_meta(self) -> dict:
-        """Возвращает глобальный скелет проекта для дерева QTreeWidget"""
+        """Возвращает глобальный скелет проекта для дерева QTreeWidget и менеджмента окон"""
         self._check_connection()
-        return {
+
+        # Логируем, какие вообще атрибуты физически записаны в корне Zarr
+        all_attrs = list(self.root.attrs.keys())
+        print(f"  [DEBUG READER] Чтение атрибутов корня. Доступные ключи в файле: {all_attrs}")
+
+        # ФИКС: Читаем не только старое дерево, но и новые плоские структуры!
+        meta_data = {
             'project_meta': self.root.attrs.get('project_meta', {}),
-            'tree_structure': self.root.attrs.get('tree_structure', {})
+            'tree_structure': self.root.attrs.get('tree_structure', {}),
+            'hierarchy': self.root.attrs.get('hierarchy', []),
+            'widgets': self.root.attrs.get('widgets', {}),
+            'workspace': self.root.attrs.get('workspace', {})
         }
+
+        print(
+            f"  [DEBUG READER] Вычитано из файла: папок={len(meta_data['hierarchy'])}, окон={len(meta_data['widgets'])}")
+        return meta_data
 
     def get_datablock_meta(self, block_uuid: str) -> dict:
         """Получает текстовые метаданные папки (pixel size, object features)"""
         self._check_connection()
         try:
-            # В Zarr 3 обращение по ключу возвращает объект группы
             block = self.root[f"blocks/{block_uuid}"]
             return {
                 'metadata': block.attrs.get('metadata', {}),
                 'data_information': block.attrs.get('data_information', {})
             }
         except KeyError:
+            print(f"  [DEBUG READER] ⚠️ Группа blocks/{block_uuid} не найдена в файле!")
             return {}
 
     def get_lazy_array(self, block_uuid: str, category: str, item_uuid: str) -> LazyBmipArray | None:
@@ -50,7 +65,7 @@ class ProjectReader:
         return None
 
     def get_graph_data(self, block_uuid: str, graph_uuid: str) -> dict | None:
-        """Восстанавливания массивы точек осей и настроек графиков"""
+        """Восстанавливает массивы точек осей и настроек графиков"""
         self._check_connection()
         path = f"blocks/{block_uuid}/graphs/{graph_uuid}"
         if path not in self.root:
@@ -58,7 +73,6 @@ class ProjectReader:
 
         g_group = self.root[path]
         return {
-            # Срез [:] в Zarr 3 выгружает весь массив в оперативную память как NumPy-массив
             'x': g_group['x'][:] if 'x' in g_group else None,
             'y': g_group['y'][:] if 'y' in g_group else None,
             'settings': g_group.attrs.get('settings', {})
@@ -77,10 +91,8 @@ class ProjectReader:
             'array': {}
         }
 
-        # Извлекаем ленивые ссылки на все многомерные массивы маппинга (1D/2D/3D)
         if 'array' in p_group:
             array_group = p_group['array']
-            # .keys() в Zarr 3.x возвращает итератор по именам непосредственных детей группы
             for item_uuid in array_group.keys():
                 result['array'][item_uuid] = LazyBmipArray(self.store, f"{path}/array/{item_uuid}")
 
@@ -93,6 +105,7 @@ class ProjectReader:
     def close(self):
         """Освобождает ZIP-архив на диске."""
         if self.store:
+            print("  [DEBUG READER] Закрытие ZipStore.")
             self.store.close()
             self.store = None
             self.root = None

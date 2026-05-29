@@ -52,19 +52,6 @@ class ProjectIOController(QObject):
 
         self._execute_background_save(target_path)
 
-    def _execute_background_save(self, path: Path):
-        self._set_menu_enabled(False)
-        self.win.statusBar().showMessage("Project saving...")
-
-        # РЕШЕНИЕ WinError 32: Освобождаем файл перед записью воркера
-        if hasattr(self.state, 'project_reader') and self.state.project_reader:
-            self.state.project_reader.close()
-            self.state.project_reader = None
-
-        self.save_worker = SaveProjectWorker(path, self.state.project_data)
-        self.save_worker.finished.connect(lambda success, msg: self._on_save_completed(success, msg, path))
-        self.save_worker.start()
-
     def _on_save_completed(self, success: bool, message: str, saved_path: Path):
         self._set_menu_enabled(True)
 
@@ -117,6 +104,31 @@ class ProjectIOController(QObject):
         self.load_worker.finished.connect(self._on_load_completed)
         self.load_worker.start()
 
+    def _close_all_windows_silently(self):
+        """Находит все MDI-окна и закрывает их без вызова QMessageBox."""
+        # Ищем mdi_area в главном окне (проверяем разные варианты именования)
+        mdi_area = getattr(self.win, 'mdi_area', getattr(self.win, 'mdiArea', None))
+        if mdi_area:
+            for window in mdi_area.subWindowList():
+                widget = window.widget()
+                if widget and hasattr(widget, '_force_close'):
+                    widget._force_close = True  # Активируем тихий режим закрытия!
+                window.close()
+
+    def _execute_background_save(self, path: Path):
+        self._set_menu_enabled(False)
+        self.win.statusBar().showMessage("Project saving...")
+
+        if self.state.project_reader:
+            self.state.project_reader.close()
+            self.state.project_reader = None
+
+        # ВАЖНО: Передаем правильный снапшот, сформированный через метод стейта!
+        snapshot = self.state.get_complete_snapshot()
+        self.save_worker = SaveProjectWorker(path, snapshot)
+        self.save_worker.finished.connect(lambda success, msg: self._on_save_completed(success, msg, path))
+        self.save_worker.start()
+
     def _on_load_completed(self, success: bool, result, reader):
         self._set_menu_enabled(True)
         if hasattr(self.win, 'progressBar'):
@@ -130,32 +142,34 @@ class ProjectIOController(QObject):
         try:
             restored_snapshot = restore_snapshot_types(result)
 
-            # Закрываем старый архив перед заменой ридера
+            # 1. Принудительно и тихо закрываем старые окна в интерфейсе
+            self._close_all_windows_silently()
+
+            # Освобождаем старый ридер
             if hasattr(self.state, 'project_reader') and self.state.project_reader:
-                self.state.project_reader.close()
+                try:
+                    self.state.project_reader.close()
+                except:
+                    pass
 
             self.state.project_reader = reader
 
-            # Атомарно обновляем данные в State
-            self.state.project_data.clear()
-            self.state.project_data.update(restored_snapshot)
-
+            # 2. Наполняем State новыми данными из снапшота
+            self.state.hydrate_from_snapshot(restored_snapshot, reader)
             self.state.set_path(reader.file_path)
             self.state.set_modified(False)
 
-            # Умный вызов обновления интерфейса (проверяем оба варианта именования)
-            if hasattr(self.win, 'rebuild_interface'):
-                self.win.rebuild_interface()
-            elif hasattr(self.win, '_rebuild_interface'):
-                self.win._rebuild_interface()
-            else:
-                raise AttributeError("MainWindow missing 'rebuild_interface' method!")
+            # 3. РЕАКТИВНЫЙ КЛЮЧ: Оповещаем все заинтересованные службы
+            # Все контроллеры, подписанные на sig_data_reset, обновят свои UI-виджеты
+            self.state.sig_data_reset.emit()
 
             self.win.statusBar().showMessage("Project loaded completely", 5000)
 
         except Exception as e:
             if reader:
                 reader.close()
+            import traceback
+            traceback.print_exc()
             QMessageBox.critical(self.win, "Deserialization Error", f"Failed to reconstruct project:\n{str(e)}")
             self.win.statusBar().showMessage("Loading Error", 5000)
 
@@ -166,16 +180,21 @@ class ProjectIOController(QObject):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
+            # 1. Сначала тихо закрываем открытые окна
+            self._close_all_windows_silently()
+
             if hasattr(self.state, 'project_reader') and self.state.project_reader:
-                self.state.project_reader.close()
+                try:
+                    self.state.project_reader.close()
+                except:
+                    pass
                 self.state.project_reader = None
 
+            # 2. Сбрасываем стейт до чистого шаблона.
+            # Метод reset_to_new() внутри себя САМ вызывает sig_data_reset.emit()
             self.state.reset_to_new()
 
-            if hasattr(self.win, 'rebuild_interface'):
-                self.win.rebuild_interface()
-            elif hasattr(self.win, '_rebuild_interface'):
-                self.win._rebuild_interface()
+            self.win.statusBar().showMessage("New project created", 5000)
 
     def _set_menu_enabled(self, enabled: bool):
         actions = ['actionSave_project', 'actionSave_project_as', 'actionOpen_project', 'actionNew_project']

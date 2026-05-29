@@ -6,10 +6,6 @@ from .writer import ProjectWriter
 
 
 def sanitize_snapshot(obj):
-    """
-    Рекурсивно очищает снимок проекта от специфичных типов данных (QUuid, Path, NumPy),
-    превращая их в стандартные примитивы Python для безопасного сохранения в JSON/Zarr.
-    """
     if isinstance(obj, dict):
         return {str(k): sanitize_snapshot(v) for k, v in obj.items()}
     elif isinstance(obj, (list, tuple, set)):
@@ -29,8 +25,8 @@ def sanitize_snapshot(obj):
 
 class SaveProjectWorker(QThread):
     """Поток для фонового сохранения проекта без зависания GUI PyQt6"""
-    finished = pyqtSignal(bool, str)  # (Успех: bool, Сообщение: str)
-    progress = pyqtSignal(int)  # Прогресс записи (0-100%)
+    finished = pyqtSignal(bool, str)
+    progress = pyqtSignal(int)
 
     def __init__(self, target_path: str | Path, project_snapshot: dict):
         super().__init__()
@@ -39,18 +35,41 @@ class SaveProjectWorker(QThread):
 
     def run(self):
         try:
-            # 1. Фикс 'cannot pickle': глубокая очистка данных от Qt-объектов перед отправкой в Zarr
-            clean_snapshot = sanitize_snapshot(self.snapshot)
+            print("\n" + "=" * 60)
+            print("[DEBUG SAVER] >>> НАЧАЛО СОХРАНЕНИЯ ПРОЕКТА <<<")
+            print(f"[DEBUG SAVER] Целевой файл: {self.target_path}")
+            print(f"[DEBUG SAVER] Исходные ключи снапшота: {list(self.snapshot.keys())}")
 
-            # 2. Фикс 'Duplicate name': если файл уже существует, жестко удаляем его.
-            # Это гарантирует, что ZipStore создаст новый чистый архив без накопления дубликатов 'zarr.json'.
+            # Телеметрия содержимого до очистки
+            if 'hierarchy' in self.snapshot:
+                print(f"[DEBUG SAVER] Найдено папок в 'hierarchy': {len(self.snapshot['hierarchy'])}")
+            if 'widgets' in self.snapshot:
+                print(f"[DEBUG SAVER] Найдено виджетов в 'widgets': {len(self.snapshot['widgets'])}")
+            if 'tree_structure' in self.snapshot:
+                print(f"[DEBUG SAVER] Присутствует старая 'tree_structure'")
+
+            # 1. Очистка данных
+            print("[DEBUG SAVER] Запуск очистки типов (sanitize_snapshot)...")
+            clean_snapshot = sanitize_snapshot(self.snapshot)
+            print(f"[DEBUG SAVER] Ключи снапшота ПОСЛЕ очистки: {list(clean_snapshot.keys())}")
+
+            # 2. Удаление старого файла
             if self.target_path.exists():
+                print("[DEBUG SAVER] Обнаружен старый файл. Удаляем для перезаписи...")
                 self.target_path.unlink(missing_ok=True)
 
-            # 3. Инициализируем оригинальный писатель и передаем ему "стерильные" данные
+            # 3. Передача писателю
+            print("[DEBUG SAVER] Передача данных в ProjectWriter...")
             writer = ProjectWriter(self.target_path)
             writer.write(clean_snapshot, progress_callback=self.progress.emit)
 
+            print("[DEBUG SAVER] <<< СОХРАНЕНИЕ УСПЕШНО ЗАВЕРШЕНО >>>")
+            print("=" * 60 + "\n")
             self.finished.emit(True, "Project saved completely!")
+
         except Exception as e:
+            print(f"[DEBUG SAVER] ❌ КРИТИЧЕСКАЯ ОШИБКА В ПОТОКЕ: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            print("=" * 60 + "\n")
             self.finished.emit(False, str(e))

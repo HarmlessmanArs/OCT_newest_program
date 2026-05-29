@@ -32,7 +32,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # 3. Настройка компонентов дерева (Паттерн Model/View)
         self.tree_model = QStandardItemModel()
-        self.tree_model.setHorizontalHeaderLabels(["Project Files"])
+        self.tree_model.setHorizontalHeaderLabels(["Project tree"])
         self.file_info.setModel(self.tree_model)
 
         # 4. ВНЕДРЕНИЕ КОНТРОЛЛЕРОВ

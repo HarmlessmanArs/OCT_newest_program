@@ -61,6 +61,19 @@ class WidgetFactoryController(QObject):
 
         folder_uuid = QUuid.createUuid().toString()
 
+        # --- КРИТИЧЕСКИЙ ФИКС: Синхронизируем добавление папки со State ---
+        if "hierarchy" not in self.state.project_data:
+            self.state.project_data["hierarchy"] = []
+
+        self.state.project_data["hierarchy"].append({
+            "uuid": folder_uuid,
+            "type": WidgetTypes.FOLDER,
+            "text": name,
+            "parent_uuid": None  # Если появится вложенность папок, сюда будем передавать uuid родителя
+        })
+        self.state.set_modified(True)
+        # -----------------------------------------------------------------
+
         folder_item = QStandardItem(name)
         folder_item.setData(folder_uuid, Qt.ItemDataRole.UserRole)
 
@@ -134,76 +147,81 @@ class WidgetFactoryController(QObject):
     # =========================================================================
 
     def restore_window_from_descriptor(self, descriptor: dict, parent_item: QStandardItem):
-        """Воссоздает живое окно на основе дескриптора из файла сохранения (Этап 5)."""
+        """Воссоздает живое окно на основе дескриптора из файла сохранения."""
+        # Защита от того, что сам дескриптор может быть None
+        descriptor = descriptor or {}
+
         widget_uuid = descriptor.get("uuid")
         title = descriptor.get("title", "Analysis Window")
-        w_type = descriptor.get("widget_type")
+        w_type = descriptor.get("type")
         parent_block_uuid = descriptor.get("parent_block_uuid")
 
-        metadata = descriptor.get("metadata", {})
-        link_name = metadata.get("link_name", title)
-        link_idx = metadata.get("link_idx", 0)
+        # БЕЗОПАСНОЕ ИЗВЛЕЧЕНИЕ: защищаемся от "settings": null в старых файлах
+        settings = descriptor.get("settings") or {}
+        link_idx = settings.get("current_image_idx", 0)
 
-        # Полностью перенаправляем в единый метод генерации, но окна НЕ показываем (show_window=False)
         self._instantiate_widget(
             widget_uuid=widget_uuid,
             widget_type=w_type,
-            title=link_name,
+            title=title,
             parent_block_uuid=parent_block_uuid,
             parent_item=parent_item,
             link_idx=link_idx,
             show_window=False
         )
 
-    # =========================================================================
-    # ВНУТРЕННИЕ СЛУЖЕБНЫЕ МЕТОДЫ (ЕДИНЫЙ ПАЙПЛАЙН ЖИЗНЕННОГО ЦИКЛА)
-    # =========================================================================
-
     def _instantiate_widget(self, widget_uuid: str, widget_type: str, title: str, parent_block_uuid: str,
                             parent_item: QStandardItem, link_idx: int = 0, show_window: bool = True):
-        """
-        ФИКС 4: Универсальный метод материализации любого ОКТ-окна.
-        Устраняет дублирование кода между созданием новых окон и реставрацией старых.
-        """
-        # 1. Извлекаем класс из динамического реестра
-        window_class = self._window_registry.get(widget_type)
-        if not window_class:
-            print(f"[Factory Critical] Неизвестный тип виджета для фабрики: {widget_type}. Пропускаем.")
+        """Универсальный метод материализации любого ОКТ-окна."""
+        if not widget_type:
+            print("[Factory Error] Тип виджета не задан (None). Проверьте ключи дескриптора.")
             return
 
-        # 2. Безопасный спавн окна по вашей точной сигнатуре __init__
+        normalized_type = str(widget_type).lower()
+        window_class = self._window_registry.get(normalized_type)
+
+        if not window_class:
+            print(f"[Factory Critical] Неизвестный тип виджета для фабрики: {normalized_type}. Пропускаем.")
+            return
+
         widget_window = window_class(
-            title,  # link_name
-            link_idx,  # link_idx (всегда числовой индекс слоя или 0)
-            obj_type=widget_type,  # obj_type
-            state=self.state,  # state (Single Source of Truth)
-            linked=parent_block_uuid,  # linked
-            parent=None  # parent (QMdiArea сама заберет владение)
+            title,
+            link_idx,
+            obj_type=normalized_type,
+            state=self.state,
+            linked=parent_block_uuid,
+            parent=None
         )
 
-        # Контроль закрытия крестиком
         widget_window._force_close = False
         widget_window.window_closed.connect(self.win.hierarchy_controller.on_widget_window_closed)
 
-        # 3. Упаковка в QMdiSubWindow через нативный метод addSubWindow
         sub_window = self.win.widgets_area.addSubWindow(widget_window)
         sub_window.setWindowTitle(title)
 
-        # Управляем видимостью в зависимости от контекста (создание или чтение файла)
+        # БЕЗОПАСНОЕ ИЗВЛЕЧЕНИЕ ДЛЯ WORKSPACE
+        workspace = self.state.project_data.get("workspace") or {}
+        mdi_positions = workspace.get("mdi_positions") or {}
+
+        if widget_uuid in mdi_positions:
+            pos_data = mdi_positions[widget_uuid] or {}
+            geom = pos_data.get("geometry")
+            if geom and isinstance(geom, list) and len(geom) == 4:
+                sub_window.setGeometry(geom[0], geom[1], geom[2], geom[3])
+            if pos_data.get("is_maximized"):
+                sub_window.showMaximized()
+
         if show_window:
             sub_window.show()
         else:
             sub_window.hide()
 
-        # 4. ФИКС 3: Согласованная регистрация в RuntimeRegistry (используем метод из _instantiate_widget)
         self.registry.register_widget(widget_uuid, widget_window, sub_window)
 
-        # 5. Визуальное добавление узла в дерево QTreeView
         item = QStandardItem(title)
         item.setData(widget_uuid, Qt.ItemDataRole.UserRole)
         parent_item.appendRow(item)
 
-        # Раскрываем родительскую папку в интерфейсе
         self.win.file_info.expand(self.win.tree_model.indexFromItem(parent_item))
 
     def _get_active_folder_context(self):

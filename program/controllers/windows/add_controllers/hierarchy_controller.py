@@ -1,9 +1,8 @@
 from PyQt6 import QtWidgets, QtCore
 from PyQt6.QtWidgets import QMenu
 from PyQt6.QtGui import QStandardItem
-from PyQt6.QtCore import Qt, QObject, QUuid
+from PyQt6.QtCore import Qt, QObject
 from ....state.project_state.constants import WidgetTypes
-
 
 class HierarchyController(QObject):
     """
@@ -16,6 +15,7 @@ class HierarchyController(QObject):
         self.win = main_window
         self.state = project_state
 
+        self.state.sig_data_reset.connect(self.on_project_data_reset)
         # Подвязываем сигналы UI к поведению контроллера
         self.win.tree_model.itemChanged.connect(self.on_item_changed)
         self.win.file_info.selectionModel().selectionChanged.connect(self.on_selection_changed)
@@ -83,25 +83,48 @@ class HierarchyController(QObject):
 
     def ensure_active_folder_selection(self):
         root = self.win.tree_model.invisibleRootItem()
+        hierarchy = self.state.project_data.get("hierarchy", [])
+
+        # 1. ПРОВЕРКА ПО STATE (Данные): Создаем дефолтную папку ТОЛЬКО если в проекте вообще 0 папок
+        if not hierarchy:
+            # Фабрика создаст элемент дерева и сама зарегистрирует его в State через add_folder_descriptor
+            self.win.widget_factory.create_folder("Folder 0")
+            hierarchy = self.state.project_data.get("hierarchy", [])
+
+        if not hierarchy:
+            return
+
+        # 2. Берём UUID самой первой папки, которая гарантированно есть в State
+        target_uuid = hierarchy[0]["uuid"]
         first_folder_item = None
 
-        # Собираем UUID всех папок из честного State
-        folder_uuids = {f["uuid"] for f in self.state.project_data.get("hierarchy", []) if
-                        f["type"] == WidgetTypes.FOLDER}
-
+        # 3. Ищем эту папку среди текущих строк в GUI (QTreeView)
         for row in range(root.rowCount()):
             child = root.child(row)
-            uuid_str = child.data(Qt.ItemDataRole.UserRole)
-            # ТЕПЕРЬ ПРОВЕРКА СТРОГАЯ:
-            if uuid_str in folder_uuids:
+            if child.data(Qt.ItemDataRole.UserRole) == target_uuid:
                 first_folder_item = child
                 break
 
+        # ЗАЩИТА: Если дерево еще не успело отрисоваться (rowCount == 0) при загрузке файла,
+        # элемент не будет найден. Мы просто выходим. Никаких дубликатов в State не запишется!
         if not first_folder_item:
-            first_folder_item = self.win.widget_factory.create_folder("Folder 0")
+            return
 
+        # 4. Выделяем найденную папку в интерфейсе
         new_idx = self.win.tree_model.indexFromItem(first_folder_item)
-        self.win.file_info.setCurrentIndex(new_idx)
+        selection_model = self.win.file_info.selectionModel()
+        if selection_model:
+            selection_model.setCurrentIndex(
+                new_idx,
+                QtCore.QItemSelectionModel.SelectionFlag.ClearAndSelect | QtCore.QItemSelectionModel.SelectionFlag.Rows
+            )
+        else:
+            self.win.file_info.setCurrentIndex(new_idx)
+
+        # Синхронизируем видимость окон в MDI зоне для этой папки
+        active_uuid = first_folder_item.data(Qt.ItemDataRole.UserRole)
+        if active_uuid:
+            self.update_widgets_visibility(active_uuid)
 
     # =========================================================================
     # ПЕРЕИМЕНОВАНИЕ (Синхронизация UI -> State)
@@ -195,8 +218,7 @@ class HierarchyController(QObject):
             return
 
         # is_widget = uuid_str in self.state.project_data.get("widgets", {})
-        is_folder = any(f["uuid"] == uuid_str and f["type"] == WidgetTypes.FOLDER for f in
-                        self.state.project_data.get("hierarchy", []))
+        is_folder = any(f["uuid"] == uuid_str for f in self.state.project_data.get("hierarchy", []))
         if is_folder:
             # Удаление папки
             reply = QtWidgets.QMessageBox.question(
@@ -244,3 +266,56 @@ class HierarchyController(QObject):
             if found:
                 return found
         return None
+
+    @QtCore.pyqtSlot()
+    def on_project_data_reset(self):
+        """
+        Вызывается реактивно при загрузке или создании нового проекта.
+        """
+        # 1. БЛОКИРУЕМ СИГНАЛЫ: и у модели дерева, и у модели выделения
+        self.win.tree_model.blockSignals(True)
+        sel_model = self.win.file_info.selectionModel()
+        if sel_model:
+            sel_model.blockSignals(True)
+
+        try:
+            # 2. Безопасно чистим дерево — теперь selectionChanged не выстрелит в спину
+            self.win.tree_model.clear()
+            self.win.tree_model.setHorizontalHeaderLabels(["Project tree"])
+
+            folder_items = {}
+            # Защита от "hierarchy": null
+            hierarchy_list = self.state.project_data.get("hierarchy") or []
+
+            for folder_data in hierarchy_list:
+                folder_data = folder_data or {}
+                uuid_str = folder_data.get("uuid")
+                text = folder_data.get("text", "Folder")
+
+                if not uuid_str:
+                    continue
+
+                folder_item = QStandardItem(text)
+                folder_item.setData(uuid_str, Qt.ItemDataRole.UserRole)
+                self.win.tree_model.appendRow(folder_item)
+                folder_items[uuid_str] = folder_item
+
+            # Защита от "widgets": null
+            widgets_dict = self.state.project_data.get("widgets") or {}
+            for w_uuid, descriptor in widgets_dict.items():
+                descriptor = descriptor or {}
+                parent_uuid = descriptor.get("parent_block_uuid")
+                parent_folder_item = folder_items.get(parent_uuid)
+
+                if parent_folder_item:
+                    self.win.widget_factory.restore_window_from_descriptor(descriptor, parent_folder_item)
+
+        finally:
+            # 3. ГАРАНТИРОВАННО возвращаем сигналы в строй, когда всё дерево уже собрано
+            self.win.tree_model.blockSignals(False)
+            if sel_model:
+                sel_model.blockSignals(False)
+
+        # 4. Финальный лоск на уже стабильном и заполненном дереве
+        self.win.file_info.expandAll()
+        self.ensure_active_folder_selection()

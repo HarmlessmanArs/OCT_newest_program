@@ -1,7 +1,6 @@
 import sys
 import traceback
 from PyQt6.QtWidgets import QApplication, QMessageBox
-
 # Импорт вашего главного окна
 from ..controllers.windows.main_window_controller import MainWindow
 
