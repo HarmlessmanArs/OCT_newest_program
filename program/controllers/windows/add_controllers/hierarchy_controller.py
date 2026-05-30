@@ -272,19 +272,20 @@ class HierarchyController(QObject):
         """
         Вызывается реактивно при загрузке или создании нового проекта.
         """
-        # 1. БЛОКИРУЕМ СИГНАЛЫ: и у модели дерева, и у модели выделения
-        self.win.tree_model.blockSignals(True)
+        # 1. ОТКЛЮЧАЕМ ОТРИСОВКУ И БЛОКИРУЕМ ВЫДЕЛЕНИЕ
+        # Это предотвратит "тяжелые" перерисовки во время наполнения дерева
+        self.win.file_info.setUpdatesEnabled(False)
+
         sel_model = self.win.file_info.selectionModel()
         if sel_model:
             sel_model.blockSignals(True)
 
         try:
-            # 2. Безопасно чистим дерево — теперь selectionChanged не выстрелит в спину
+            # 2. Безопасно чистим дерево — сигналы самой модели НЕ блокируем
             self.win.tree_model.clear()
             self.win.tree_model.setHorizontalHeaderLabels(["Project tree"])
 
             folder_items = {}
-            # Защита от "hierarchy": null
             hierarchy_list = self.state.project_data.get("hierarchy") or []
 
             for folder_data in hierarchy_list:
@@ -300,7 +301,6 @@ class HierarchyController(QObject):
                 self.win.tree_model.appendRow(folder_item)
                 folder_items[uuid_str] = folder_item
 
-            # Защита от "widgets": null
             widgets_dict = self.state.project_data.get("widgets") or {}
             for w_uuid, descriptor in widgets_dict.items():
                 descriptor = descriptor or {}
@@ -308,13 +308,15 @@ class HierarchyController(QObject):
                 parent_folder_item = folder_items.get(parent_uuid)
 
                 if parent_folder_item:
+                    # Внутри фабрика корректно добавит дочерние элементы,
+                    # и дерево (View) мгновенно узнает об этом
                     self.win.widget_factory.restore_window_from_descriptor(descriptor, parent_folder_item)
 
         finally:
-            # 3. ГАРАНТИРОВАННО возвращаем сигналы в строй, когда всё дерево уже собрано
-            self.win.tree_model.blockSignals(False)
+            # 3. ГАРАНТИРОВАННО возвращаем управление отрисовкой виджета
             if sel_model:
                 sel_model.blockSignals(False)
+            self.win.file_info.setUpdatesEnabled(True)
 
         # 4. Финальный лоск на уже стабильном и заполненном дереве
         self.win.file_info.expandAll()

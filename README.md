@@ -30,14 +30,16 @@ Also, it was made to calculate geometrical and optical parameters in diffusion p
 # _Structure of the program_
 
 Program.py
-* app - the heart of the program
+* app - **Application core**
     * init.py
-    * main.py
-* controllers - here are described how program responses to user 
+    * main.py: The primary entry point of the software. It instantiates the QApplication, initializes global services 
+(logging, configuration), boots up the ProjectState, binds controllers, mounts the main window, and starts the Qt event 
+loop.
+* controllers - **User Interaction & Business Logic** 
     * init.py
-    * small_controllers.py
-    * workspace_controller.py
-    * widgets
+    * small_controllers.py: Handles isolated, low-level UI components such as status bars, toolbars, and context tooltips.
+    * workspace_controller.py: Orchestrates the Multi-Document Interface (MDI) area, coordinating the lifecycles, visibility, and focus of active window sheets.
+    * widgets: MDI Document View Controllers
       * init.py
       * widgets.py
       * gallery_controller.py
@@ -47,19 +49,20 @@ Program.py
       * imaing_boundaries_controller.py
       * imaing_roi_controller.py
       * imaing_mu_t_controller.py
-    * windows
+    * windows: Global Application Windows
       * init.py
-      * main_window_controller.py
-      * add_controllers
+      * main_window_controller.py: Drives the main shell—menus, global shortcut key bindings, and sub-controller routing
+      * add_controllers: Core Framework Services
         * init.py
-        * hierarchy_controller.py
-        * project_io_controller.py
-        * widget_factory_controller.py
-    * addtional_windows
+        * hierarchy_controller.py: Drives the main project tree view (QTreeView), parsing item clicks and selection transitions
+        * project_io_controller.py: Intercepts file actions (New, Open, Save, Save As) and communicates with background worker threads
+        * widget_factory_controller.py: Implements the Factory Pattern. Reconstructs dynamic UI components at runtime from declarative serialized window descriptors
+    * addtional_windows: Different mini-windows
       * init.py
       * addtional_windows_conroller.py
       * data_info_controller.py
-* core - mathematical functions 
+* core: **Mathematical & Algorithmic Domain**  
+Pure Python/NumPy/SciPy engine. Contains zero references to PyQt dependencies, allowing these modules to be unit-tested or run independently via CLI scripts.
   * roi_calculation.py
   * average_intensity_calculation.py
   * mu_t_calculation.py
@@ -70,9 +73,10 @@ Program.py
     * v1_only_nondeformable.py
     * v2_only_deformable.py
     * v3_fusion.py
-* events -
+* events: **System Event Bus (empty)**
   * init.py
-* gui - how windows look
+* gui: **Presentation Layer / Views**  
+Contains layout layouts and structural visual configurations. These scripts omit functional execution patterns and focus entirely on assembling widgets into QLayout trees.
   * init.py
   * windows
     * init.py
@@ -89,41 +93,43 @@ Program.py
   * additional_windows
     * init.py
     * ui_data_info.py
-* projects_storage - how to save, open or create project
+* projects_storage: **Project Virtual File System**  
+Handles data serialization routines into efficient archival targets (e.g., compressed directory structures, HDF5, or Zarr archives
   * init.py
-  * core
+  * core: Logical representations of saved structures in system memory (It is not used still - empty)
     * init.py
     * datablock.py
     * dataset.py
     * handles.py
     * project.py
-  * io
+  * io: Low-level stream readers and writers 
     * init.py
-    * loader.py
-    * reader.py
-    * saver.py
-    * writer.py
-  * lazy
+    * loader.py: Asynchronous task execution workers (QThread) that process heavy disk operations while feeding real-time progress indicators back to the UI thread.
+    * reader.py: File system handlers that perform block read operations against binary files or Zarr hierarchies
+    * saver.py: Asynchronous task execution workers (QThread) that process heavy disk operations while feeding real-time progress indicators back to the UI thread.
+    * writer.py: File system handlers that perform block write operations against binary files or Zarr hierarchies
+  * lazy: 
     * init.py
-    * laz_array
-* services - 
+    * laz_array: Virtual array proxy classes. Enables smooth UI handling of multi-gigabyte datasets by retrieving only the visible image slice on demand instead of loading the entire block into memory.
+* services: **Cross-Cutting Application Concerns(empty)**
   * init.py
-* state - the state of datasets and project itself
-  * project_state
+* state: **Centralized Application State**  
+Keeps state snapshots sync-locked. Any interactive state shift (e.g., editing contrast limits or shifting active table selections) writes directly to this layer, automatically propagating updates out to registered view modules
+  * project_state: Global runtime context
     * init.py
-    * constants.py
-    * state.py
-    * runtime_registry
+    * constants.py: Global application lookup references (lookup tables, color maps, ...).
+    * state.py: The ProjectState manager—retains path addresses, flags unsaved changes (is_modified), and links active data matrices
+    * runtime_registry: Keeps track of open MDI views and their matching controllers to cleanly close workspaces and prevent memory leaks
   * dataset_state
     * init.py
-    * gallery_state.py
-* utils 
+    * gallery_state.py: Tracks **localized** display configurations for image canvases
+* utils: 
   * init.py
-  * link_base.py
-  * logging.py
-  * paths.py
-  * types_restore.py
-* workers - functions which works on background not to block main window 
+  * link_base.py: Abstract tools for structural linking and safe memory reference strategies
+  * logging.py: Configures multi-destination diagnostic streams (empty)
+  * paths.py: Abstracts platform-specific environment destinations
+  * types_restore.py: Type-casting utility scripts to map basic JSON primitives back to native Python types and complex NumPy arrays during project loading
+* workers: **Asynchronous Thread Pool Management (empty)** 
   * init.py
 
 # _User path_

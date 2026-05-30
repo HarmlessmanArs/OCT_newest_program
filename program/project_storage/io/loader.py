@@ -8,7 +8,7 @@ class LoadProjectWorker(QThread):
     Поток для фонового открытия и первичного парсинга проекта .bmip.
     Не блокирует GUI PyQt6 во время чтения диска.
     """
-    finished = pyqtSignal(bool, object, object)
+    work_finished = pyqtSignal(bool, object, object)
     progress = pyqtSignal(int)
 
     def __init__(self, file_path: str | Path):
@@ -103,7 +103,7 @@ class LoadProjectWorker(QThread):
             print("[DEBUG LOADER] >>> ПОТОК ЗАГРУЗКИ СФОРМИРОВАЛ СНАПШОТ УСПЕШНО <<<")
             print("=" * 60 + "\n")
 
-            self.finished.emit(True, snapshot, reader)
+            self.work_finished.emit(True, snapshot, reader)
 
         except Exception as e:
             print(f"[DEBUG LOADER] ❌ КРИТИЧЕСКАЯ ОШИБКА ПРИ ПОДГОТОВКЕ СНАПШОТА: {str(e)}")
@@ -112,4 +112,4 @@ class LoadProjectWorker(QThread):
             if reader:
                 reader.close()
             print("=" * 60 + "\n")
-            self.finished.emit(False, f"Ошибка при загрузке проекта: {str(e)}", None)
+            self.work_finished.emit(False, f"Ошибка при загрузке проекта: {str(e)}", None)

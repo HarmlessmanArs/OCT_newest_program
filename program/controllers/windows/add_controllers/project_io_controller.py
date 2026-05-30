@@ -101,18 +101,18 @@ class ProjectIOController(QObject):
         if hasattr(self.win, 'progressBar'):
             self.load_worker.progress.connect(self.win.progressBar.setValue)
 
-        self.load_worker.finished.connect(self._on_load_completed)
+        # ИСПРАВЛЕНО: Подключаемся к кастомному work_finished, а не к нативному finished
+        self.load_worker.work_finished.connect(self._on_load_completed)
         self.load_worker.start()
 
     def _close_all_windows_silently(self):
         """Находит все MDI-окна и закрывает их без вызова QMessageBox."""
-        # Ищем mdi_area в главном окне (проверяем разные варианты именования)
         mdi_area = getattr(self.win, 'mdi_area', getattr(self.win, 'mdiArea', None))
         if mdi_area:
             for window in mdi_area.subWindowList():
                 widget = window.widget()
                 if widget and hasattr(widget, '_force_close'):
-                    widget._force_close = True  # Активируем тихий режим закрытия!
+                    widget._force_close = True
                 window.close()
 
     def _execute_background_save(self, path: Path):
@@ -123,10 +123,11 @@ class ProjectIOController(QObject):
             self.state.project_reader.close()
             self.state.project_reader = None
 
-        # ВАЖНО: Передаем правильный снапшот, сформированный через метод стейта!
         snapshot = self.state.get_complete_snapshot()
         self.save_worker = SaveProjectWorker(path, snapshot)
-        self.save_worker.finished.connect(lambda success, msg: self._on_save_completed(success, msg, path))
+
+        # ИСПРАВЛЕНО: Подключаемся к кастомному work_finished, который корректно прокинет success и msg в лямбду
+        self.save_worker.work_finished.connect(lambda success, msg: self._on_save_completed(success, msg, path))
         self.save_worker.start()
 
     def _on_load_completed(self, success: bool, result, reader):
@@ -142,10 +143,8 @@ class ProjectIOController(QObject):
         try:
             restored_snapshot = restore_snapshot_types(result)
 
-            # 1. Принудительно и тихо закрываем старые окна в интерфейсе
             self._close_all_windows_silently()
 
-            # Освобождаем старый ридер
             if hasattr(self.state, 'project_reader') and self.state.project_reader:
                 try:
                     self.state.project_reader.close()
@@ -154,13 +153,10 @@ class ProjectIOController(QObject):
 
             self.state.project_reader = reader
 
-            # 2. Наполняем State новыми данными из снапшота
             self.state.hydrate_from_snapshot(restored_snapshot, reader)
             self.state.set_path(reader.file_path)
             self.state.set_modified(False)
 
-            # 3. РЕАКТИВНЫЙ КЛЮЧ: Оповещаем все заинтересованные службы
-            # Все контроллеры, подписанные на sig_data_reset, обновят свои UI-виджеты
             self.state.sig_data_reset.emit()
 
             self.win.statusBar().showMessage("Project loaded completely", 5000)
@@ -180,7 +176,6 @@ class ProjectIOController(QObject):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
-            # 1. Сначала тихо закрываем открытые окна
             self._close_all_windows_silently()
 
             if hasattr(self.state, 'project_reader') and self.state.project_reader:
@@ -190,10 +185,7 @@ class ProjectIOController(QObject):
                     pass
                 self.state.project_reader = None
 
-            # 2. Сбрасываем стейт до чистого шаблона.
-            # Метод reset_to_new() внутри себя САМ вызывает sig_data_reset.emit()
             self.state.reset_to_new()
-
             self.win.statusBar().showMessage("New project created", 5000)
 
     def _set_menu_enabled(self, enabled: bool):

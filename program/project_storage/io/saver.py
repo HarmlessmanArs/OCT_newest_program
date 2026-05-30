@@ -25,7 +25,7 @@ def sanitize_snapshot(obj):
 
 class SaveProjectWorker(QThread):
     """Поток для фонового сохранения проекта без зависания GUI PyQt6"""
-    finished = pyqtSignal(bool, str)
+    work_finished = pyqtSignal(bool, str)
     progress = pyqtSignal(int)
 
     def __init__(self, target_path: str | Path, project_snapshot: dict):
@@ -65,11 +65,11 @@ class SaveProjectWorker(QThread):
 
             print("[DEBUG SAVER] <<< СОХРАНЕНИЕ УСПЕШНО ЗАВЕРШЕНО >>>")
             print("=" * 60 + "\n")
-            self.finished.emit(True, "Project saved completely!")
+            self.work_finished.emit(True, "Project saved completely!")
 
         except Exception as e:
             print(f"[DEBUG SAVER] ❌ КРИТИЧЕСКАЯ ОШИБКА В ПОТОКЕ: {str(e)}")
             import traceback
             traceback.print_exc()
             print("=" * 60 + "\n")
-            self.finished.emit(False, str(e))
+            self.work_finished.emit(False, str(e))
