@@ -115,6 +115,17 @@ class ProjectIOController(QObject):
                     widget._force_close = True
                 window.close()
 
+        # ==================== ИСПРАВЛЕНИЕ ЗДЕСЬ ====================
+        # Очищаем реестр рантайма, чтобы он забыл UUID окон из старого проекта
+        if hasattr(self.win, 'runtime_registry'):
+            # Если у вашего класса реестра есть метод clear(), вызываем его:
+            if hasattr(self.win.runtime_registry, 'clear'):
+                self.win.runtime_registry.clear()
+            # Если метода clear нет, но внутри используется словарь (например, self.windows), очищаем его напрямую:
+            elif hasattr(self.win.runtime_registry, 'windows') and isinstance(self.win.runtime_registry.windows, dict):
+                self.win.runtime_registry.windows.clear()
+        # ===========================================================
+
     def _execute_background_save(self, path: Path):
         self._set_menu_enabled(False)
         self.win.statusBar().showMessage("Project saving...")
@@ -158,6 +169,8 @@ class ProjectIOController(QObject):
             self.state.set_modified(False)
 
             self.state.sig_data_reset.emit()
+            # if hasattr(self.state, 'sig_project_loaded'):
+            #     self.state.sig_project_loaded.emit()
 
             self.win.statusBar().showMessage("Project loaded completely", 5000)
 

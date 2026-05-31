@@ -57,6 +57,7 @@ loop.
         * hierarchy_controller.py: Drives the main project tree view (QTreeView), parsing item clicks and selection transitions
         * project_io_controller.py: Intercepts file actions (New, Open, Save, Save As) and communicates with background worker threads
         * widget_factory_controller.py: Implements the Factory Pattern. Reconstructs dynamic UI components at runtime from declarative serialized window descriptors
+        * interface_controller.py:
     * addtional_windows: Different mini-windows
       * init.py
       * addtional_windows_conroller.py
@@ -162,5 +163,6 @@ There will also be an option to load existing projects and continue working with
 проекта, а также все окна, которые были в "старом" проекте остаются**)
 5) Убрать вопрос про удаление каждого отдельного окна при загрузке проекта, а только спросить, если проект не сохранён, нужно
 ли его сохранять
+6) Подвязать InterfaceController так, чтобы программа помнила расположение окон, а затем адекватно загружала при открытии файла проекта
 
 # 6._Bags (last updated 31.05.26)_

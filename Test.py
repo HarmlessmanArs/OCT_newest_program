@@ -1,3 +1,0 @@
-import zarr
-
-help(zarr)

@@ -15,6 +15,7 @@ class ProjectState(QObject):
     sig_modified_changed = pyqtSignal(bool)  # Статус сохранения
     sig_project_path_changed = pyqtSignal(Path)  # Изменение пути к .bmip
     sig_data_reset = pyqtSignal()  # Полный сброс (Новый/Загруженный проект)
+    # sig_project_loaded = pyqtSignal()
 
     # Сигналы тонкой настройки (чтобы не перерисовывать всё приложение целиком)
     sig_workspace_changed = pyqtSignal()  # Изменились позиции окон или активная вкладка

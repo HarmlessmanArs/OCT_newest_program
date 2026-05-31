@@ -49,7 +49,6 @@ class ProjectLifecycleController(QObject):
         self._save_worker = SaveProjectWorker(target_path, project_snapshot)
         self._save_worker.progress.connect(self.progress_dialog.setValue)
 
-        # FIX: Используем уникальное имя сигнала воркера во избежание коллизий с QThread.finished
         self._save_worker.work_finished.connect(self._on_save_finished)
         self._save_worker.start()
 
@@ -96,7 +95,6 @@ class ProjectLifecycleController(QObject):
         self._load_worker = LoadProjectWorker(file_path)
         self._load_worker.progress.connect(self.progress_dialog.setValue)
 
-        # FIX: Переключено на безопасный пользовательский сигнал
         self._load_worker.work_finished.connect(self._on_load_finished)
         self._load_worker.start()
 
@@ -118,44 +116,55 @@ class ProjectLifecycleController(QObject):
             # Предотвращаем мерцание интерфейса при глубокой перестройке слоев
             self.win.setUpdatesEnabled(False)
 
+            # === АРХИТЕКТУРНАЯ ЗАЩИТА: Блокируем сигналы модели и стейта ===
+            # Блокировка tree_model предотвращает ложные вызовы on_item_changed.
+            # Блокировка state предотвращает реактивный вызов on_project_data_reset(),
+            # который дублировал дерево папок параллельно с Шагом 3.
+            self.win.tree_model.blockSignals(True)
+            self.state.blockSignals(True)
+
             # === ШАГ 1. ТОТАЛЬНАЯ ЗАЧИСТКА ТЕКУЩЕГО ИНТЕРФЕЙСА ===
-            # Вычищаем старые виджеты из реестра
             self.win.runtime_registry.clear_all()
 
-            # FIX: Закрываем все открытые подокна в рабочей области MDI, чтобы не плодить "призраков"
             if hasattr(self.win, 'mdi_area') and self.win.mdi_area:
                 self.win.mdi_area.closeAllSubWindows()
 
-            # Очищаем визуальное дерево
             self.win.tree_model.clear()
             self.win.tree_model.setHorizontalHeaderLabels(["Project Structure"])
 
             # === ШАГ 2. ГИДРАТАЦИЯ СТЕЙТА ===
             self.state.hydrate_from_snapshot(snapshot, reader_instance)
 
-            # === ШАГ 3. ВОССТАНОВЛЕНИЕ ИЕРАРХИИ И ГЕНЕРАЦИЯ ОКOН ===
+            # === ШАГ 3. ВОССТАНОВЛЕНИЕ ИЕРАРХИИ И ГЕНЕРАЦИЯ ОКОН ===
             tree_data = snapshot.get('tree_structure', {})
             self._reconstruct_ui_layer(tree_data, self.win.tree_model.invisibleRootItem())
-
-            # Переводим фокус на первый элемент
-            self.win.hierarchy_controller.ensure_active_folder_selection()
-            self.state.set_modified(False)
-            self.project_loaded.emit(str(self.win.current_project_path))
 
         except Exception as e:
             QMessageBox.critical(self.win, "Restoration Error", f"Ошибка воссоздания UI-слоя:\n{str(e)}")
         finally:
+            # ГАРАНТИРОВАННО возвращаем сигналы и обновление в исходное состояние
+            self.state.blockSignals(False)
+            self.win.tree_model.blockSignals(False)
             self.win.setUpdatesEnabled(True)
             self._load_worker = None
+
+        # Действия после разблокировки сигналов на полностью стабильном и чистом дереве
+        if success:
+            try:
+                if hasattr(self.win, 'file_info'):
+                    self.win.file_info.expandAll()
+                self.win.hierarchy_controller.ensure_active_folder_selection()
+                self.state.set_modified(False)
+                self.project_loaded.emit(str(self.win.current_project_path))
+            except Exception as e:
+                print(f"Ошибка финальной фокусировки дерева: {e}")
 
     # =========================================================================
     # РЕКУРСИВНЫЙ ОРКЕСТРАТОР РЕСТАВРАЦИИ UI
     # =========================================================================
 
     def _reconstruct_ui_layer(self, node_data: dict, parent_item):
-        """
-        Рекурсивный обход древовидной структуры метаданных.
-        """
+        """Рекурсивный обход древовидной структуры метаданных."""
         if not node_data:
             return
 
