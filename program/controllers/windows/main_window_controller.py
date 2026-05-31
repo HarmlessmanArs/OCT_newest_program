@@ -44,9 +44,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._setup_shortcuts()
 
         # 6. Стартовое состояние (Создаем "Folder 0" через фабрику)
-        init_folder = self.widget_factory.create_folder("Folder 0")
-        self.file_info.setCurrentIndex(self.tree_model.indexFromItem(init_folder))
-        self._update_window_title()
+        # init_folder = self.widget_factory.create_folder("Folder 0")
+        # self.file_info.setCurrentIndex(self.tree_model.indexFromItem(init_folder))
+        # self._update_window_title()
+        self._on_project_reset()
 
     def _setup_shortcuts(self):
         """Вынесенная настройка клавиатурных сокращений."""
@@ -92,8 +93,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.graph_count = 1
         self.table_count = 1
 
-        init_folder = self.widget_factory.create_folder("Folder 0")
-        self.file_info.setCurrentIndex(self.tree_model.indexFromItem(init_folder))
+        # ==================== ИСПРАВЛЕНИЕ ТУТ ====================
+        # Создаем Folder 0 ТОЛЬКО если в состоянии проекта вообще нет папок (проект чистый)
+        if not self.project_state.project_data.get("hierarchy"):
+            init_folder = self.widget_factory.create_folder("Folder 0")
+            self.file_info.setCurrentIndex(self.tree_model.indexFromItem(init_folder))
 
     def rebuild_interface(self):
         """
@@ -114,22 +118,38 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # 2. Безопасно уничтожаем окна без вызова побочных эффектов
             self._clear_mdi_area_safely()
 
-            # 3. Извлекаем структуру проекта из синхронизированного State
+            # 3. Извлекаем плоскую структуру проекта из синхронизированного State
             project_data = self.project_state.project_data
-            tree_structure = project_data.get('tree_structure', {})
+            hierarchy = project_data.get('hierarchy', [])
 
-            if not tree_structure:
+            if not hierarchy:
                 self.statusBar().showMessage("Открыт пустой проект", 5000)
                 return
 
-            # 4. Запускаем рекурсивное построение и материализацию
+            # 4. Строим карту связей "родитель -> список детей" для быстрого рекурсивного построения
+            from collections import defaultdict
+            parent_to_children = defaultdict(list)
+
+            # Собираем все существующие UUID, чтобы отлавливать "сирот"
+            all_uuids = {node.get('uuid') for node in hierarchy if node.get('uuid')}
+
+            for node in hierarchy:
+                p_uuid = node.get('parent_uuid')
+                # Если parent_uuid не задан или родителя физически нет в проекте,
+                # считаем элемент корневым (привязываем к коренному значению None)
+                if p_uuid is None or p_uuid not in all_uuids:
+                    parent_to_children[None].append(node)
+                else:
+                    parent_to_children[p_uuid].append(node)
+
+            # 5. Запускаем построение дерева с корня (у которого parent_uuid = None)
             root_item = self.tree_model.invisibleRootItem()
-            self._build_tree_nodes_recursive(root_item, tree_structure)
+            self._build_tree_nodes_from_hierarchy(root_item, None, parent_to_children)
 
             # Раскрываем все узлы дерева
             self.file_info.expandAll()
 
-            # 5. Обновляем заголовок окна
+            # 6. Обновляем заголовок окна
             self._update_window_title()
             self.statusBar().showMessage("Интерфейс успешно восстановлен", 5000)
 
@@ -142,25 +162,32 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.file_info.blockSignals(False)
             self.widgets_area.blockSignals(False)
 
-    def _build_tree_nodes_recursive(self, parent_item, nodes_data: list | dict):
+    def _build_tree_nodes_from_hierarchy(self, parent_item, parent_uuid, parent_to_children):
         """
-        Рекурсивно строит иерархию интерфейса.
-        Разделяет папки и функциональные окна анализа, делегируя сборку окон фабрике.
+        Рекурсивно строит иерархию интерфейса на основе плоской карты связей.
+        Разделяет папки и функциональные окна анализа.
         """
-        # Если пришел список узлов (например, содержимое папки)
-        if isinstance(nodes_data, list):
-            for node in nodes_data:
-                self._build_tree_nodes_recursive(parent_item, node)
-            return
+        # Достаем список детей для текущего родительского UUID
+        children = parent_to_children.get(parent_uuid, [])
 
-        # Если пришел конкретный узел
-        if isinstance(nodes_data, dict):
-            node_uuid = nodes_data.get('uuid')
-            node_text = nodes_data.get('text', 'Без названия')
-            node_type = nodes_data.get('type')  # 'folder' или типы из WidgetTypes
+        for child in children:
+            node_uuid = child.get('uuid')
+            node_text = child.get('text', 'Без названия')
+            node_type = child.get('type')
 
-            # Если узел является окном анализа (не папка)
-            if node_type and node_type != 'folder':
+            # Сценарий 1: Если узел является ПАПКОЙ
+            if node_type == 'folder':
+                tree_item = QStandardItem(node_text)
+                if node_uuid:
+                    tree_item.setData(node_uuid, Qt.ItemDataRole.UserRole)
+
+                parent_item.appendRow(tree_item)
+
+                # Рекурсивно уходим вглубь, чтобы построить детей внутри этой папки
+                self._build_tree_nodes_from_hierarchy(tree_item, node_uuid, parent_to_children)
+
+            # Сценарий 2: Если узел является ОКНОМ анализа (виджетом)
+            else:
                 widgets_dict = self.project_state.project_data.get("widgets", {})
                 descriptor = widgets_dict.get(node_uuid)
 
@@ -168,15 +195,3 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     # Фабрика сама создаст и окно, и элемент дерева QStandardItem,
                     # и правильно свяжет их с Single Source of Truth!
                     self.widget_factory.restore_window_from_descriptor(descriptor, parent_item)
-                    return  # Прерываем ветку, фабрика сделала всё за нас
-
-            # Если узел — это папка (или корневая структура)
-            tree_item = QStandardItem(node_text)
-            if node_uuid:
-                tree_item.setData(node_uuid, Qt.ItemDataRole.UserRole)
-
-            parent_item.appendRow(tree_item)
-
-            # Если у папки есть вложенные элементы, спускаемся глубже
-            if 'children' in nodes_data:
-                self._build_tree_nodes_recursive(tree_item, nodes_data['children'])

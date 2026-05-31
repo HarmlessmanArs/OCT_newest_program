@@ -9,14 +9,14 @@
 5) Tasks
 6) Bugs
 
-# _What is this program for?_
+# 1._What is this program for?_
 
 This program was made for OCT images processing. It consits of different modules 
 such as boundaries detection and calculation of their positions and distinations between them.
 Additionaly this program allows to calculate average intensity and extinction corfficient in ROI. 
 Also, it was made to calculate geometrical and optical parameters in diffusion process
 
-# __How to run the code__
+# 2.__How to run the code__
 ### Python version
 * Python 3.13
 ### Libraries you need
@@ -27,7 +27,7 @@ Also, it was made to calculate geometrical and optical parameters in diffusion p
 * scipy (1.17.1)
 * zarr (3.1.2)
 
-# _Structure of the program_
+# 3._Structure of the program_
 
 Program.py
 * app - **Application core**
@@ -132,7 +132,7 @@ Keeps state snapshots sync-locked. Any interactive state shift (e.g., editing co
 * workers: **Asynchronous Thread Pool Management (empty)** 
   * init.py
 
-# _User path_
+# 4._User path_
 
 Program launch → Creation of a new gallery and, accordingly, a separate folder for the dataset → Loading and selecting images for processing → 
 Using the ROI module to define the region of interest and detect the object boundaries within this region → 
@@ -142,7 +142,7 @@ to continue data processing.
 
 There will also be an option to load existing projects and continue working within the loaded project.
 
-# _Tasks (last updated 29.05.26)_
+# 5._Tasks (last updated 29.05.26)_
 
 1) Change ~~QTableWidget~~ in table module to QTableView + QAbstractTableModel
 2) Write mathematical modules for (crossed text means this task has been done):
@@ -163,11 +163,4 @@ There will also be an option to load existing projects and continue working with
 5) Убрать вопрос про удаление каждого отдельного окна при загрузке проекта, а только спросить, если проект не сохранён, нужно
 ли его сохранять
 
-
-
-# _Bags (last updated 29.05.26)_ 
-1) Всё ещё создаётся лишняя папка при загрузке. Понял, возможно, с чем связано. Когда я из нового проекта вызывал загрузку проекта,
-то папка "возникала", но когда я загрузил проект, в котором находился, то количество папок не изменилось. Возможно, связано с тем, что
-у нового файла папка Folder 0 имеет свой uuid и не удаляется при открытии файла, хотя, очевидно, должна 
-2) При удалении виджетов о них не стирается информация из state, то есть получаем призрачные виджеты, которые отображаются в дереве,
-но не существую на практике
+# 6._Bags (last updated 31.05.26)_

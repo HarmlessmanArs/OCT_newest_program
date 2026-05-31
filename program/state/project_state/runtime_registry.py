@@ -33,19 +33,25 @@ class RuntimeRegistry(QObject):
         Единый пайплайн удаления (Этап 9).
         Гарантированно уничтожает окно в MDI и чистит память без утечек.
         """
-        # 1. Безопасно закрываем и удаляем MDI контейнер
-        if uuid_str in self._sub_windows:
-            sub = self._sub_windows[uuid_str]
+        # 1. Безопасно извлекаем MDI контейнер
+        sub = self._sub_windows.pop(uuid_str, None)
+
+        if sub:
+            # Вытаскиваем внутренний виджет (наш WidgetsWindow) из контейнера MDI
+            widget_window = sub.widget()
+
+            # Если это наш виджет и у него есть флаг принудительного закрытия
+            if widget_window and hasattr(widget_window, '_force_close'):
+                widget_window._force_close = True  # <--- ВЗВОДИМ ПРЕДОХРАНИТЕЛЬ
+
             try:
-                sub.close()
+                sub.close()  # Теперь closeEvent примет событие молча, без QMessageBox и без сигналов!
                 sub.deleteLater()
             except RuntimeError:
                 pass  # Окно уже могло быть удалено со стороны C++
-            del self._sub_windows[uuid_str]
 
-        # 2. Удаляем ссылку на сам виджет рабочих модулей
-        if uuid_str in self._widgets:
-            del self._widgets[uuid_str]
+        # 2. Безопасно удаляем ссылку на сам виджет рабочих модулей
+        self._widgets.pop(uuid_str, None)
 
     def clear_all(self):
         """Полная зачистка интерфейса перед загрузкой нового проекта (Этап 7)"""

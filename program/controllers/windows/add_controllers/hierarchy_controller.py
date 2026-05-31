@@ -170,6 +170,7 @@ class HierarchyController(QObject):
         Удаляет сущность отовсюду синхронно и безопасно.
         """
         # --- Шаг 1. Delete from State ---
+        print("DELETE UUID =", uuid_str)
         is_widget = uuid_str in self.state.project_data.get("widgets", {})
         if is_widget:
             self.state.remove_widget_descriptor(uuid_str)
@@ -195,11 +196,24 @@ class HierarchyController(QObject):
 
     def on_widget_window_closed(self, widget_obj):
         """Каллбэк, срабатывающий при ручном закрытии окна крестиком."""
-        # Вытаскиваем строковый UUID, который виджет хранит у себя
-        uuid_attr = getattr(widget_obj, 'link_idx', None) or getattr(widget_obj, 'uuid', None)
-        if uuid_attr:
-            uuid_str = str(uuid_attr)
-            # Запускаем конвейер удаления
+        uuid_str = getattr(widget_obj, 'uuid', None)
+
+        if not uuid_str:
+            link_attr = getattr(widget_obj, 'link_idx', None)
+            if link_attr and not isinstance(link_attr, int):
+                uuid_str = str(link_attr)
+
+        if uuid_str:
+            # === ЗАЩИТА ОТ ПОВТОРНОГО ВХОДА (РЕЭНТЕРАБЕЛЬНОСТИ) ===
+            # Если удаление запущено из дерева, виджет УЖЕ удален из State.
+            # В таком случае повторно конвейер запускать нельзя!
+            widgets_dict = self.state.project_data.get("widgets", {})
+            if uuid_str not in widgets_dict:
+                print(f"CLOSED: Окно {uuid_str} закрыто через пайплайн дерева. Игнорируем дублирующий вызов.")
+                return
+            # ======================================================
+
+            print("CLOSED VALID UUID:", uuid_str)
             self.execute_deletion_pipeline(uuid_str)
 
     def on_delete_shortcut_triggered(self):

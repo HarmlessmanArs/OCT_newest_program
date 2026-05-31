@@ -65,15 +65,15 @@ class WidgetFactoryController(QObject):
         if "hierarchy" not in self.state.project_data:
             self.state.project_data["hierarchy"] = []
 
-        self.state.project_data["hierarchy"].append({
-            "uuid": folder_uuid,
-            "type": WidgetTypes.FOLDER,
-            "text": name,
-            "parent_uuid": None  # Если появится вложенность папок, сюда будем передавать uuid родителя
-        })
+        # self.state.project_data["hierarchy"].append({
+        #     "uuid": folder_uuid,
+        #     "type": WidgetTypes.FOLDER,
+        #     "text": name,
+        #     "parent_uuid": None  # Если появится вложенность папок, сюда будем передавать uuid родителя
+        # })
+        self.state.add_folder_descriptor(folder_uuid, name, None)
         self.state.set_modified(True)
         # -----------------------------------------------------------------
-
         folder_item = QStandardItem(name)
         folder_item.setData(folder_uuid, Qt.ItemDataRole.UserRole)
 
@@ -193,6 +193,7 @@ class WidgetFactoryController(QObject):
             parent=None
         )
 
+        widget_window.uuid = widget_uuid
         widget_window._force_close = False
         widget_window.window_closed.connect(self.win.hierarchy_controller.on_widget_window_closed)
 
