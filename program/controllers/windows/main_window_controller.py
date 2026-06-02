@@ -67,11 +67,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """Безопасно уничтожает MDI окна без вызова побочных эффектов."""
         for sub_window in self.widgets_area.subWindowList():
             widget = sub_window.widget()
-            if widget and hasattr(widget, 'window_closed'):
-                try:
-                    widget.window_closed.disconnect()
-                except TypeError:
-                    pass
+            if widget:
+                # === ИСПРАВЛЕНИЕ: Добавляем флаг тихого закрытия ===
+                if hasattr(widget, '_force_close'):
+                    widget._force_close = True
+                # ===================================================
+
+                if hasattr(widget, 'window_closed'):
+                    try:
+                        widget.window_closed.disconnect()
+                    except TypeError:
+                        pass
+
             sub_window.close()
             sub_window.deleteLater()
 

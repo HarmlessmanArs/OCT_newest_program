@@ -26,23 +26,11 @@ class ProjectIOController(QObject):
             self.win.actionSave_project_as.triggered.connect(self.on_save_project_as)
         if hasattr(self.win, 'actionOpen_project'):
             self.win.actionOpen_project.triggered.connect(self.on_open_project)
-        if hasattr(self.win, 'actionNew_project'):
-            self.win.actionNew_project.triggered.connect(self.on_new_project)
+        if hasattr(self.win, 'actionNew'):
+            self.win.actionNew.triggered.connect(self.on_new_project)
 
     @pyqtSlot()
     def on_save_project(self):
-        # print("\n=== DEBUG: ПЕРЕД СОХРАНЕНИЕМ НА ДИСК ===")
-        #
-        # # Смотрим, что реально лежит в иерархии данных проекта
-        # hierarchy = self.state.project_data.get("hierarchy", {})
-        # print(f"Количество виджетов в hierarchy: {len(hierarchy.get('widgets', {}))}")
-        # pprint.pprint(hierarchy)
-        #
-        # # Смотрим, сколько геометрий окон мы реально сохраняем
-        # mdi_positions = self.state.project_data.get("workspace", {}).get("mdi_positions", {})
-        # print(f"Количество сохраненных геометрий в workspace: {len(mdi_positions)}")
-        # pprint.pprint(mdi_positions)
-        # print("========================================\n")
         if self.state.current_path is None:
             self.on_save_project_as()
         else:
@@ -96,6 +84,19 @@ class ProjectIOController(QObject):
 
     @pyqtSlot()
     def on_open_project(self):
+        # 1. Проверяем, есть ли несохраненные изменения
+        if getattr(self.state, 'modified', False):
+            reply = QMessageBox.question(
+                self.win,
+                "Unsaved Changes",
+                "The current project has unsaved changes. Are you sure you want to close it and load another one? All unsaved data will be lost.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            # Если пользователь нажал No, отменяем загрузку нового проекта
+            if reply == QMessageBox.StandardButton.No:
+                return
+
+        # 2. Если сохранять не нужно (или согласились сбросить), открываем диалог загрузки
         start_dir = self.state.current_path.parent if self.state.current_path else self.state.user_settings.last_save_project_folder
 
         file_path_str, _ = QFileDialog.getOpenFileName(
@@ -194,24 +195,30 @@ class ProjectIOController(QObject):
             QMessageBox.critical(self.win, "Deserialization Error", f"Failed to reconstruct project:\n{str(e)}")
             self.win.statusBar().showMessage("Loading Error", 5000)
 
+    @pyqtSlot()
     def on_new_project(self):
-        reply = QMessageBox.question(
-            self.win, "New project",
-            "Are you sure you want to create new project? Unsaved data will be lost.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        if reply == QMessageBox.StandardButton.Yes:
-            self._close_all_windows_silently()
+        # Здесь тоже делаем проверку на сохранение, чтобы лишний раз не пугать пользователя,
+        # если проект и так чистый или уже сохранен.
+        if getattr(self.state, 'modified', False):
+            reply = QMessageBox.question(
+                self.win, "New project",
+                "Current project has unsaved changes. Are you sure you want to create a new project? Unsaved data will be lost.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.No:
+                return
 
-            if hasattr(self.state, 'project_reader') and self.state.project_reader:
-                try:
-                    self.state.project_reader.close()
-                except:
-                    pass
-                self.state.project_reader = None
+        self._close_all_windows_silently()
 
-            self.state.reset_to_new()
-            self.win.statusBar().showMessage("New project created", 5000)
+        if hasattr(self.state, 'project_reader') and self.state.project_reader:
+            try:
+                self.state.project_reader.close()
+            except:
+                pass
+            self.state.project_reader = None
+
+        self.state.reset_to_new()
+        self.win.statusBar().showMessage("New project created", 5000)
 
     def _set_menu_enabled(self, enabled: bool):
         actions = ['actionSave_project', 'actionSave_project_as', 'actionOpen_project', 'actionNew_project']

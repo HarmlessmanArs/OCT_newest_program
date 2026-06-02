@@ -322,6 +322,14 @@ class HierarchyController(QObject):
                 folder_items[uuid_str] = folder_item
 
             widgets_dict = self.state.project_data.get("widgets") or []
+            '''
+            CRITICAL ERROR CATCHED:
+Traceback (most recent call last):
+File "C:\\Users\\Workf\\PycharmProjects\\GitProjects\\OCT_newest_program\\program\\controllers\\windows\\add_controllers\\hierarchy_controller.py", line 325, in on_project_data_reset
+for w_uuid, descriptor in widgets_dict.items():
+                          ^^^^^^^^^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'items'
+            '''
             for w_uuid, descriptor in widgets_dict.items():
                 descriptor = descriptor or {}
                 parent_uuid = descriptor.get("parent_block_uuid")
