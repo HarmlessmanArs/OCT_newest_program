@@ -42,6 +42,7 @@ class ProjectLifecycleController(QObject):
             target_path = Path(path_str)
 
         self.win.current_project_path = Path(target_path)
+
         project_snapshot = self.state.get_complete_snapshot()
 
         self._create_progress_dialog("Saving project...", "Please wait...")

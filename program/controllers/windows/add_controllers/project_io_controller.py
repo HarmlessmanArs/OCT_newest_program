@@ -1,6 +1,7 @@
 from pathlib import Path
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 from PyQt6.QtCore import QObject, pyqtSlot
+import pprint
 
 from ....project_storage.io.saver import SaveProjectWorker
 from ....project_storage.io.loader import LoadProjectWorker
@@ -30,6 +31,18 @@ class ProjectIOController(QObject):
 
     @pyqtSlot()
     def on_save_project(self):
+        # print("\n=== DEBUG: ПЕРЕД СОХРАНЕНИЕМ НА ДИСК ===")
+        #
+        # # Смотрим, что реально лежит в иерархии данных проекта
+        # hierarchy = self.state.project_data.get("hierarchy", {})
+        # print(f"Количество виджетов в hierarchy: {len(hierarchy.get('widgets', {}))}")
+        # pprint.pprint(hierarchy)
+        #
+        # # Смотрим, сколько геометрий окон мы реально сохраняем
+        # mdi_positions = self.state.project_data.get("workspace", {}).get("mdi_positions", {})
+        # print(f"Количество сохраненных геометрий в workspace: {len(mdi_positions)}")
+        # pprint.pprint(mdi_positions)
+        # print("========================================\n")
         if self.state.current_path is None:
             self.on_save_project_as()
         else:
@@ -129,15 +142,15 @@ class ProjectIOController(QObject):
     def _execute_background_save(self, path: Path):
         self._set_menu_enabled(False)
         self.win.statusBar().showMessage("Project saving...")
-
         if self.state.project_reader:
             self.state.project_reader.close()
             self.state.project_reader = None
-
+        # ==================== НОВОЕ ====================
+        # Синхронизируем интерфейс со State ПЕРЕД созданием слепка
+        self._sync_workspace_geometry()
+        # ===============================================
         snapshot = self.state.get_complete_snapshot()
         self.save_worker = SaveProjectWorker(path, snapshot)
-
-        # ИСПРАВЛЕНО: Подключаемся к кастомному work_finished, который корректно прокинет success и msg в лямбду
         self.save_worker.work_finished.connect(lambda success, msg: self._on_save_completed(success, msg, path))
         self.save_worker.start()
 
@@ -168,9 +181,8 @@ class ProjectIOController(QObject):
             self.state.set_path(reader.file_path)
             self.state.set_modified(False)
 
-            self.state.sig_data_reset.emit()
-            # if hasattr(self.state, 'sig_project_loaded'):
-            #     self.state.sig_project_loaded.emit()
+            # self.state.sig_data_reset.emit()
+            self.state.sig_project_loaded.emit()
 
             self.win.statusBar().showMessage("Project loaded completely", 5000)
 
@@ -206,3 +218,30 @@ class ProjectIOController(QObject):
         for action_name in actions:
             if hasattr(self.win, action_name):
                 getattr(self.win, action_name).setEnabled(enabled)
+
+    def _sync_workspace_geometry(self):
+        """Собирает геометрию всех MDI-окон перед сохранением проекта."""
+        positions = {}
+        active_uuid = None
+
+        mdi_area = getattr(self.win, 'widgets_area', None)
+        if not mdi_area:
+            return
+
+        active_sub = mdi_area.activeSubWindow()
+
+        for sub_window in mdi_area.subWindowList():
+            widget = sub_window.widget()
+            uuid_str = getattr(widget, 'uuid', None)
+
+            if uuid_str:
+                rect = sub_window.geometry()
+                positions[str(uuid_str)] = {
+                    "geometry": [rect.x(), rect.y(), rect.width(), rect.height()],  # Изменили ключ на 'geometry'
+                    "is_maximized": sub_window.isMaximized()  # Изменили ключ на 'is_maximized'
+                }
+
+                if sub_window == active_sub:
+                    active_uuid = str(uuid_str)
+
+        self.state.update_workspace_state(active_uuid, positions)

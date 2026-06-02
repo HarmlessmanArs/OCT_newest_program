@@ -159,13 +159,15 @@ class HierarchyController(QObject):
 
     def execute_deletion_pipeline(self, uuid_str: str):
         """Централизованный конвейер уничтожения объектов."""
+        uuid_str = str(uuid_str)  # <--- ФИКС 1: Принудительное приведение к строке
         print("DELETE UUID =", uuid_str)
+
         is_widget = uuid_str in self.state.project_data.get("widgets", {})
         if is_widget:
             self.state.remove_widget_descriptor(uuid_str)
         else:
             self.state.project_data["hierarchy"] = [
-                f for f in self.state.project_data.get("hierarchy", []) if f["uuid"] != uuid_str
+                f for f in self.state.project_data.get("hierarchy", []) if str(f["uuid"]) != uuid_str
             ]
             self.state.set_modified(True)
 
@@ -193,7 +195,9 @@ class HierarchyController(QObject):
                 uuid_str = str(link_attr)
 
         if uuid_str:
+            uuid_str = str(uuid_str)  # <--- ФИКС 2: Принудительное приведение к строке
             widgets_dict = self.state.project_data.get("widgets", {})
+
             if uuid_str not in widgets_dict:
                 print(f"CLOSED: Окно {uuid_str} закрыто через пайплайн дерева. Игнорируем дублирующий вызов.")
                 return

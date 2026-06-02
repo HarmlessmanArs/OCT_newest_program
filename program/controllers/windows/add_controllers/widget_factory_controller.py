@@ -64,13 +64,6 @@ class WidgetFactoryController(QObject):
         # --- КРИТИЧЕСКИЙ ФИКС: Синхронизируем добавление папки со State ---
         if "hierarchy" not in self.state.project_data:
             self.state.project_data["hierarchy"] = []
-
-        # self.state.project_data["hierarchy"].append({
-        #     "uuid": folder_uuid,
-        #     "type": WidgetTypes.FOLDER,
-        #     "text": name,
-        #     "parent_uuid": None  # Если появится вложенность папок, сюда будем передавать uuid родителя
-        # })
         self.state.add_folder_descriptor(folder_uuid, name, None)
         self.state.set_modified(True)
         # -----------------------------------------------------------------
@@ -172,16 +165,39 @@ class WidgetFactoryController(QObject):
 
     def _instantiate_widget(self, widget_uuid: str, widget_type: str, title: str, parent_block_uuid: str,
                             parent_item: QStandardItem, link_idx: int = 0, show_window: bool = True):
-        """Универсальный метод материализации любого ОКТ-окна."""
+        """Универсальный метод материализации любого ОКТ-окна с глубокой отладкой дерева."""
+        print(f"\n[DEBUG FACTORY] >>> Начинаем сборку виджета '{title}'")
+        print(f"  - UUID виджета: {widget_uuid}")
+        print(f"  - Родительский UUID папки: {parent_block_uuid}")
+
+        # === КРИТИЧЕСКАЯ ПРОВЕРКА РОДИТЕЛЯ В ДЕРЕВЕ ===
+        if parent_item is None:
+            print("  - [❌ КРИТИЧЕСКАЯ ОШИБКА] parent_item равен None! Виджету некуда прикрепиться в дереве.")
+        else:
+            p_model = parent_item.model()
+            print(f"  - Диагностика родительского элемента '{parent_item.text()}':")
+            print(f"    * Адрес в памяти: {hex(id(parent_item))}")
+            print(f"    * К какой модели привязан родитель: {p_model}")
+            print(f"    * Актуальная модель окна: {self.win.tree_model}")
+
+            if p_model is None:
+                print(
+                    "    [❌ БАГ ОБНАРУЖЕН] parent_item — это ПРИЗРАК! Он не принадлежит ни одной модели дерева. Элемент не отобразится!")
+            elif p_model != self.win.tree_model:
+                print("    [❌ БАГ ОБНАРУЖЕН] parent_item привязан к СТАРОЙ или ДРУГОЙ модели дерева!")
+            else:
+                print("    [✅ ОК] Родитеский элемент живой и находится в актуальной модели дерева.")
+        # ==============================================
+
         if not widget_type:
-            print("[Factory Error] Тип виджета не задан (None). Проверьте ключи дескриптора.")
+            print("  - [Factory Error] Тип виджета не задан (None). Пропускаем.")
             return
 
         normalized_type = str(widget_type).lower()
         window_class = self._window_registry.get(normalized_type)
 
         if not window_class:
-            print(f"[Factory Critical] Неизвестный тип виджета для фабрики: {normalized_type}. Пропускаем.")
+            print(f"  - [Factory Critical] Неизвестный тип виджета для фабрики: {normalized_type}. Пропускаем.")
             return
 
         widget_window = window_class(
@@ -219,11 +235,20 @@ class WidgetFactoryController(QObject):
 
         self.registry.register_widget(widget_uuid, widget_window, sub_window)
 
+        # Создаем элемент дерева для виджета
         item = QStandardItem(title)
         item.setData(widget_uuid, Qt.ItemDataRole.UserRole)
-        parent_item.appendRow(item)
+
+        if parent_item is not None:
+            parent_item.appendRow(item)
+            print(
+                f"  - [ДЕРЕВО] Добавлена строка '{title}' внутрь родителя. Текущее кол-во детей у родителя: {parent_item.rowCount()}")
+        else:
+            self.win.tree_model.appendRow(item)
+            print(f"  - [ДЕРЕВО] Предупреждение: parent_item был None, добавили виджет в корень модели.")
 
         self.win.file_info.expand(self.win.tree_model.indexFromItem(parent_item))
+        print("[DEBUG FACTORY] <<< Сборка виджета завершена успешно\n")
 
     def _get_active_folder_context(self):
         """Определяет UUID родительской папки на основе выделения в QTreeView."""
