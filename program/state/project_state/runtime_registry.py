@@ -16,24 +16,63 @@ class RuntimeRegistry(QObject):
         self._widgets = {}  # {widget_uuid_str: QWidget}
         self._sub_windows = {}  # {widget_uuid_str: QMdiSubWindow}
 
+    @staticmethod
+    def _clean_uuid(val) -> str:
+        """
+        Извлекает чистую строку UUID в формате {xxxx-xxxx...} из любых объектов.
+        Гарантирует 100% совпадение ключей.
+        """
+        if not val:
+            return ""
+
+        # Если это PyQt-объект QUuid, используем его родной метод
+        if hasattr(val, 'toString'):
+            return val.toString()
+
+        val_str = str(val)
+
+        # Если это замусоренная строка (например, repr от QUuid), вытаскиваем суть
+        import re
+        match = re.search(r'\{[0-9a-fA-F\-]{36}\}', val_str)
+        if match:
+            return match.group(0)
+
+        return val_str
+
     def register_widget(self, uuid_str: str, widget: QWidget, sub_window: QMdiSubWindow = None):
         """Регистрирует живые компоненты интерфейса."""
-        uuid_str = str(uuid_str)  # <--- ФИКС 3: Нормализация ключа
+        print(
+            "[REGISTRY REGISTER]",
+            uuid_str,
+            type(uuid_str)
+        )
+        uuid_str = self._clean_uuid(uuid_str)  # <--- ФИКС 3: Нормализация ключа
         self._widgets[uuid_str] = widget
         if sub_window:
             self._sub_windows[uuid_str] = sub_window
+            print(self._sub_windows.keys())
+
 
     def get_widget(self, uuid_str: str) -> QWidget | None:
-        return self._widgets.get(str(uuid_str))  # <--- ФИКС 4
+        return self._widgets.get(self._clean_uuid(uuid_str))  # <--- ФИКС 4
 
     def get_sub_window(self, uuid_str: str) -> QMdiSubWindow | None:
-        return self._sub_windows.get(str(uuid_str))  # <--- ФИКС 5
+        print(
+            "[REGISTRY LOOKUP]",
+            uuid_str,
+            type(uuid_str)
+        )
+        print(
+            "[REGISTRY KEYS]",
+            list(self._sub_windows.keys())
+        )
+        return self._sub_windows.get(self._clean_uuid(uuid_str))  # <--- ФИКС 5
 
     def unregister_and_destroy(self, uuid_str: str):
         """
         Единый пайплайн удаления (Этап 9).
         """
-        uuid_str = str(uuid_str)  # <--- ФИКС 6
+        uuid_str = self._clean_uuid(uuid_str)  # <--- ФИКС 6
 
         # 1. Безопасно извлекаем MDI контейнер
         sub = self._sub_windows.pop(uuid_str, None)

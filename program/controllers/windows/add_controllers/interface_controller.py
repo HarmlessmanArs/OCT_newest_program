@@ -113,6 +113,8 @@ class InterfaceController(QObject):
 
             self.win.statusBar().showMessage("Интерфейс успешно восстановлен", 5000)
 
+            self._debug_print_tree_state()
+
         except Exception as e:
             self.win.statusBar().showMessage("Ошибка при сборке интерфейса", 5000)
             import traceback
@@ -183,3 +185,22 @@ class InterfaceController(QObject):
         else:
             print("  - [WARN] Окно с active_uuid не найдено среди живых окон или active_uuid равен None.")
         print("[DEBUG INTERFACE] <<< Завершение работы восстановления интерфейса\n")
+
+    def _debug_print_tree_state(self):
+        """Сканирует реальную структуру элементов в QStandardItemModel."""
+        print("\n" + "=" * 60)
+        print("[DEBUG INTERFACE] СТРУКТУРА ДЕРЕВА ПОСЛЕ ЗАГРУЗКИ:")
+        root = self.win.tree_model.invisibleRootItem()
+
+        for i in range(root.rowCount()):
+            folder_item = root.child(i)
+            f_uuid = folder_item.data(Qt.ItemDataRole.UserRole)
+            print(f"📁 ПАПКА: '{folder_item.text()}' | UUID: {f_uuid}")
+
+            for j in range(folder_item.rowCount()):
+                widget_item = folder_item.child(j)
+                w_uuid = widget_item.data(Qt.ItemDataRole.UserRole)
+                parent_text = widget_item.parent().text() if widget_item.parent() else "НЕТ РОДИТЕЛЯ"
+                print(f"   ↳ 📄 ВИДЖЕТ: '{widget_item.text()}' | UUID: {w_uuid} | Род. папка: '{parent_text}'")
+
+        print("=" * 60 + "\n")

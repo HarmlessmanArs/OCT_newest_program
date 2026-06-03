@@ -89,7 +89,7 @@ class ProjectState(QObject):
         self._modified = False
 
         self.sig_data_reset.emit()
-        self.sig_modified_changed.emit(False)
+        self.sig_modified_changed.emit(self._modified)
 
     def load_from_snapshot(self, snapshot: dict, path: Path, reader):
         """Загружает десериализованные данные из воркера загрузки (Этап 7)"""
@@ -118,14 +118,6 @@ class ProjectState(QObject):
         self.sig_project_path_changed.emit(path)
         self.sig_data_reset.emit()
         self.sig_modified_changed.emit(False)
-
-    # =========================================================================
-    # API ДЛЯ УПРАВЛЕНИЯ ВУДЖЕТ-ДЕСКРИПТОРАМИ (ЭТАП 4)
-    # =========================================================================
-
-        # =========================================================================
-        # API ДЛЯ УПРАВЛЕНИЯ ПАПКАМИ (ИЕРАРХИЕЙ)
-        # =========================================================================
 
     def add_folder_descriptor(self, folder_uuid: str, text: str, parent_uuid: str = None):
         """Регистрирует новую папку в плоском состоянии проекта."""
@@ -260,13 +252,3 @@ class ProjectState(QObject):
             "workspace": self.project_data.get("workspace", {}),
             "blocks": self.project_data.get("datablocks", {})  # Реальные тяжелые данные (сканы, массивы)
         }
-
-    def build_tree_structure_snapshot(self) -> dict:
-        """
-        [ВАЖНО] Собирает текущую иерархию из QTreeView обратно в JSON-дерево.
-        Этот метод вызывается прямо перед сохранением.
-        """
-        # Сюда передается ссылка на вашу модель tree_model из главного окна
-        # Реализуется через обход строк модели от invisibleRootItem
-        # (Ниже покажем логику генерации)
-        pass

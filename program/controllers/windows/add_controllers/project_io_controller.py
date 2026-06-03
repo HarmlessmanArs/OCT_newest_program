@@ -182,7 +182,6 @@ class ProjectIOController(QObject):
             self.state.set_path(reader.file_path)
             self.state.set_modified(False)
 
-            # self.state.sig_data_reset.emit()
             self.state.sig_project_loaded.emit()
 
             self.win.statusBar().showMessage("Project loaded completely", 5000)

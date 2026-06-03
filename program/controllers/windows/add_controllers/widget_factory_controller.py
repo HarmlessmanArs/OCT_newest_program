@@ -170,25 +170,6 @@ class WidgetFactoryController(QObject):
         print(f"  - UUID виджета: {widget_uuid}")
         print(f"  - Родительский UUID папки: {parent_block_uuid}")
 
-        # === КРИТИЧЕСКАЯ ПРОВЕРКА РОДИТЕЛЯ В ДЕРЕВЕ ===
-        if parent_item is None:
-            print("  - [❌ КРИТИЧЕСКАЯ ОШИБКА] parent_item равен None! Виджету некуда прикрепиться в дереве.")
-        else:
-            p_model = parent_item.model()
-            print(f"  - Диагностика родительского элемента '{parent_item.text()}':")
-            print(f"    * Адрес в памяти: {hex(id(parent_item))}")
-            print(f"    * К какой модели привязан родитель: {p_model}")
-            print(f"    * Актуальная модель окна: {self.win.tree_model}")
-
-            if p_model is None:
-                print(
-                    "    [❌ БАГ ОБНАРУЖЕН] parent_item — это ПРИЗРАК! Он не принадлежит ни одной модели дерева. Элемент не отобразится!")
-            elif p_model != self.win.tree_model:
-                print("    [❌ БАГ ОБНАРУЖЕН] parent_item привязан к СТАРОЙ или ДРУГОЙ модели дерева!")
-            else:
-                print("    [✅ ОК] Родитеский элемент живой и находится в актуальной модели дерева.")
-        # ==============================================
-
         if not widget_type:
             print("  - [Factory Error] Тип виджета не задан (None). Пропускаем.")
             return

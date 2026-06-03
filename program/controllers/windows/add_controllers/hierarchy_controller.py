@@ -2,7 +2,7 @@ from PyQt6 import QtWidgets, QtCore, sip
 from PyQt6.QtWidgets import QMenu
 from PyQt6.QtGui import QStandardItem
 from PyQt6.QtCore import Qt, QObject
-from ....state.project_state.constants import WidgetTypes
+# from ....state.project_state.constants import WidgetTypes
 
 
 class HierarchyController(QObject):
@@ -21,6 +21,29 @@ class HierarchyController(QObject):
         self.win.file_info.selectionModel().selectionChanged.connect(self.on_selection_changed)
         self.win.widgets_area.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.win.widgets_area.customContextMenuRequested.connect(self.open_mdi_context_menu)
+
+    @staticmethod
+    def _clean_uuid(val) -> str:
+        """
+        Извлекает чистую строку UUID в формате {xxxx-xxxx...} из любых объектов.
+        Гарантирует 100% совпадение ключей.
+        """
+        if not val:
+            return ""
+
+        # Если это PyQt-объект QUuid, используем его родной метод
+        if hasattr(val, 'toString'):
+            return val.toString()
+
+        val_str = str(val)
+
+        # Если это замусоренная строка (например, repr от QUuid), вытаскиваем суть
+        import re
+        match = re.search(r'\{[0-9a-fA-F\-]{36}\}', val_str)
+        if match:
+            return match.group(0)
+
+        return val_str
 
     def open_mdi_context_menu(self, position):
         menu = QMenu()
@@ -49,36 +72,94 @@ class HierarchyController(QObject):
             return
 
         item = self.win.tree_model.itemFromIndex(indexes[0])
-        uuid_str = item.data(Qt.ItemDataRole.UserRole)
+
+        # 1. Извлекаем и полностью очищаем UUID кликнутого элемента
+        uuid_raw = item.data(Qt.ItemDataRole.UserRole)
+        uuid_str = self._clean_uuid(uuid_raw)
+
+        print("\n" + "=" * 50)
+        print(f"[DEBUG HIERARCHY] >>> Клик по элементу дерева: '{item.text()}'")
+        print(f"  - ЧИСТЫЙ UUID кликнутого элемента: {uuid_str}")
 
         if not uuid_str:
+            print("  - [WARN] Элемент не имеет UUID. Выход из обработчика.")
+            print("=" * 50 + "\n")
             return
 
         widgets_dict = self.state.project_data.get("widgets", {})
+        print(f"  - Всего виджетов в словаре State: {len(widgets_dict)}")
 
-        if uuid_str in widgets_dict:
-            active_folder_uuid = widgets_dict[uuid_str].get("parent_block_uuid")
+        # 🔥 КРИТИЧЕСКИЙ ФИКС: Создаем временный словарь с идеально чистыми ключами
+        clean_widgets_dict = {self._clean_uuid(k): v for k, v in widgets_dict.items()}
+
+        # 2. Ищем чистый UUID внутри словаря с чистыми ключами
+        if uuid_str in clean_widgets_dict:
+            # Если кликнули по виджету, достаем и ОЧИЩАЕМ UUID его родителя
+            raw_parent = clean_widgets_dict[uuid_str].get("parent_block_uuid")
+            active_folder_uuid = self._clean_uuid(raw_parent)
+            print(f"  - Это ВИДЖЕТ. Его родительская папка: {active_folder_uuid}")
         else:
+            # Если кликнули по папке
             active_folder_uuid = uuid_str
+            print(f"  - Это ПАПКА. Будем использовать её UUID: {active_folder_uuid}")
 
         if active_folder_uuid:
             self.update_widgets_visibility(active_folder_uuid)
+        else:
+            print("  - [CRITICAL] active_folder_uuid равен None! Окна будут скрыты/не изменятся.")
+        print("=" * 50 + "\n")
 
     def update_widgets_visibility(self, folder_uuid: str):
         """Управляет видимостью окон MDI на основе активной папки (UUID)."""
+        target_folder = self._clean_uuid(folder_uuid)
         widgets_dict = self.state.project_data.get("widgets", {})
 
-        for w_uuid, descriptor in widgets_dict.items():
-            sub_window = self.win.runtime_registry.get_sub_window(w_uuid)
+        print(f"\n  [VISIBILITY TRACE] Начало обновления видимости для папки (Cleaned): '{target_folder}'")
 
+        for w_uuid, descriptor in widgets_dict.items():
+            clean_w_uuid = self._clean_uuid(w_uuid)
+
+            # 🔥 КРИТИЧЕСКИ ВАЖНО: обязательно очищаем parent_uuid, чтобы сравнивать чистые строки
+            parent_uuid = self._clean_uuid(descriptor.get("parent_block_uuid"))
+
+            # Для красивого вывода в консоль
+            title = descriptor.get('title', clean_w_uuid)
+
+            # Ищем окно
+            sub_window = self.win.runtime_registry.get_sub_window(clean_w_uuid)
+
+            # Фоллбэк: если реестр вдруг хранит сырые ключи
+            if not sub_window:
+                sub_window = self.win.runtime_registry.get_sub_window(str(w_uuid))
+
+            # Логика видимости с принтами
             if sub_window and not sip.isdeleted(sub_window):
                 try:
-                    if descriptor.get("parent_block_uuid") == folder_uuid:
+                    if parent_uuid == target_folder:
                         sub_window.show()
+                        print(f"    * Окно '{title}': ПОКАЗАТЬ (родитель {parent_uuid} == {target_folder})")
                     else:
                         sub_window.hide()
+                        print(f"    * Окно '{title}': СКРЫТЬ (родитель {parent_uuid} != {target_folder})")
                 except RuntimeError:
-                    pass
+                    print(f"    * [WARN] Окно '{title}' ({clean_w_uuid}) уже удалено в C++ (RuntimeError)")
+            else:
+                print(f"    * [CRITICAL] Окно '{title}' ({clean_w_uuid}) НЕ НАЙДЕНО в RuntimeRegistry!")
+        print("  [VISIBILITY TRACE] Завершено\n")
+
+            # if sub_window:
+            #     try:
+            #         if str(descriptor.get("parent_block_uuid")) == folder_uuid:         # parent_uuid
+            #             sub_window.show()
+            #             print(f"    * Окно {descriptor.get('title', w_uuid)}: ПОКАЗАТЬ (родитель {parent_uuid})")
+            #         else:
+            #             sub_window.hide()
+            #             print(
+            #                 f"    * Окно {descriptor.get('title', w_uuid)}: СКРЫТЬ (родитель {parent_uuid} != {folder_uuid})")
+            #     except RuntimeError:
+            #         print(f"    * Окно {w_uuid} удалено (RuntimeError)")
+            # else:
+            #     print(f"    * Окно {w_uuid} не найдено в RuntimeRegistry!")
 
     def ensure_active_folder_selection(self):
         root = self.win.tree_model.invisibleRootItem()
@@ -321,15 +402,8 @@ class HierarchyController(QObject):
                 self.win.tree_model.appendRow(folder_item)
                 folder_items[uuid_str] = folder_item
 
-            widgets_dict = self.state.project_data.get("widgets") or []
-            '''
-            CRITICAL ERROR CATCHED:
-Traceback (most recent call last):
-File "C:\\Users\\Workf\\PycharmProjects\\GitProjects\\OCT_newest_program\\program\\controllers\\windows\\add_controllers\\hierarchy_controller.py", line 325, in on_project_data_reset
-for w_uuid, descriptor in widgets_dict.items():
-                          ^^^^^^^^^^^^^^^^^^
-AttributeError: 'list' object has no attribute 'items'
-            '''
+            widgets_dict = self.state.project_data.get("widgets") or {}
+
             for w_uuid, descriptor in widgets_dict.items():
                 descriptor = descriptor or {}
                 parent_uuid = descriptor.get("parent_block_uuid")
