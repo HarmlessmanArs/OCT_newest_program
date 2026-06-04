@@ -6,6 +6,7 @@ from .constants import WidgetTypes
 from ...utils.paths import UserSettingsState
 
 
+
 class ProjectState(QObject):
     """
     Единый источник правды (Single Source of Truth) для состояния проекта.
@@ -42,6 +43,28 @@ class ProjectState(QObject):
 
         self.reset_to_new()
 
+    @staticmethod
+    def _clean_uuid(val) -> str:
+        """
+        Извлекает чистую строку UUID в формате {xxxx-xxxx...} из любых объектов.
+        Гарантирует 100% совпадение ключей.
+        """
+        if not val:
+            return ""
+
+        # Если это PyQt-объект QUuid, используем его родной метод
+        if hasattr(val, 'toString'):
+            return val.toString()
+
+        val_str = str(val)
+
+        # Если это замусоренная строка (например, repr от QUuid), вытаскиваем суть
+        import re
+        match = re.search(r'\{[0-9a-fA-F\-]{36}\}', val_str)
+        if match:
+            return match.group(0)
+
+        return val_str
 
     @property
     def current_path(self) -> Path | None:
@@ -90,34 +113,6 @@ class ProjectState(QObject):
 
         self.sig_data_reset.emit()
         self.sig_modified_changed.emit(self._modified)
-
-    def load_from_snapshot(self, snapshot: dict, path: Path, reader):
-        """Загружает десериализованные данные из воркера загрузки (Этап 7)"""
-        self._current_path = path
-        self.reader = reader
-        self.project_reader = reader  # Привязываем ридер к сессии для ленивого чтения
-
-        # Нормализуем структуру: раскладываем транспортные ключи по внутренним полочкам State
-        self.project_data = {
-            "project_meta": snapshot.get("project_meta", {}),
-            "hierarchy": snapshot.get("hierarchy", []),
-            "widgets": snapshot.get("widgets", {}),
-            "workspace": snapshot.get("workspace") or {"active_widget_uuid": None, "mdi_positions": {}},
-            "datablocks": snapshot.get("blocks", {})  # Исправляем маппинг: blocks -> datablocks!
-        }
-
-        # Защита: если открыли старый файл (где плоские структуры пустые), распаковываем дерево
-        if not self.project_data["hierarchy"] and not self.project_data["widgets"]:
-            self.project_data["hierarchy"] = []
-            self.project_data["widgets"] = {}
-            self._extract_folders_from_tree(snapshot.get("tree_structure", {}))
-
-        self._modified = False
-
-        # Оповещаем UI-слой, что данные полностью обновились
-        self.sig_project_path_changed.emit(path)
-        self.sig_data_reset.emit()
-        self.sig_modified_changed.emit(False)
 
     def add_folder_descriptor(self, folder_uuid: str, text: str, parent_uuid: str = None):
         """Регистрирует новую папку в плоском состоянии проекта."""

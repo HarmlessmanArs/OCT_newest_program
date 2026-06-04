@@ -2,6 +2,7 @@ from PyQt6 import QtWidgets, QtCore, sip
 from PyQt6.QtWidgets import QMenu
 from PyQt6.QtGui import QStandardItem
 from PyQt6.QtCore import Qt, QObject
+from ...small_controllers import UuidController
 # from ....state.project_state.constants import WidgetTypes
 
 
@@ -15,6 +16,7 @@ class HierarchyController(QObject):
         super().__init__(main_window)
         self.win = main_window
         self.state = project_state
+        self.id_controller = UuidController()
 
         self.state.sig_data_reset.connect(self.on_project_data_reset)
         self.win.tree_model.itemChanged.connect(self.on_item_changed)
@@ -22,28 +24,28 @@ class HierarchyController(QObject):
         self.win.widgets_area.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.win.widgets_area.customContextMenuRequested.connect(self.open_mdi_context_menu)
 
-    @staticmethod
-    def _clean_uuid(val) -> str:
-        """
-        Извлекает чистую строку UUID в формате {xxxx-xxxx...} из любых объектов.
-        Гарантирует 100% совпадение ключей.
-        """
-        if not val:
-            return ""
-
-        # Если это PyQt-объект QUuid, используем его родной метод
-        if hasattr(val, 'toString'):
-            return val.toString()
-
-        val_str = str(val)
-
-        # Если это замусоренная строка (например, repr от QUuid), вытаскиваем суть
-        import re
-        match = re.search(r'\{[0-9a-fA-F\-]{36}\}', val_str)
-        if match:
-            return match.group(0)
-
-        return val_str
+    # @staticmethod
+    # def _clean_uuid(val) -> str:
+    #     """
+    #     Извлекает чистую строку UUID в формате {xxxx-xxxx...} из любых объектов.
+    #     Гарантирует 100% совпадение ключей.
+    #     """
+    #     if not val:
+    #         return ""
+    #
+    #     # Если это PyQt-объект QUuid, используем его родной метод
+    #     if hasattr(val, 'toString'):
+    #         return val.toString()
+    #
+    #     val_str = str(val)
+    #
+    #     # Если это замусоренная строка (например, repr от QUuid), вытаскиваем суть
+    #     import re
+    #     match = re.search(r'\{[0-9a-fA-F\-]{36}\}', val_str)
+    #     if match:
+    #         return match.group(0)
+    #
+    #     return val_str
 
     def open_mdi_context_menu(self, position):
         menu = QMenu()
@@ -75,7 +77,7 @@ class HierarchyController(QObject):
 
         # 1. Извлекаем и полностью очищаем UUID кликнутого элемента
         uuid_raw = item.data(Qt.ItemDataRole.UserRole)
-        uuid_str = self._clean_uuid(uuid_raw)
+        uuid_str = self.id_controller.clean_uuid(uuid_raw)
 
         print("\n" + "=" * 50)
         print(f"[DEBUG HIERARCHY] >>> Клик по элементу дерева: '{item.text()}'")
@@ -90,13 +92,13 @@ class HierarchyController(QObject):
         print(f"  - Всего виджетов в словаре State: {len(widgets_dict)}")
 
         # 🔥 КРИТИЧЕСКИЙ ФИКС: Создаем временный словарь с идеально чистыми ключами
-        clean_widgets_dict = {self._clean_uuid(k): v for k, v in widgets_dict.items()}
+        clean_widgets_dict = {self.id_controller.clean_uuid(k): v for k, v in widgets_dict.items()}
 
         # 2. Ищем чистый UUID внутри словаря с чистыми ключами
         if uuid_str in clean_widgets_dict:
             # Если кликнули по виджету, достаем и ОЧИЩАЕМ UUID его родителя
             raw_parent = clean_widgets_dict[uuid_str].get("parent_block_uuid")
-            active_folder_uuid = self._clean_uuid(raw_parent)
+            active_folder_uuid = self.id_controller.clean_uuid(raw_parent)
             print(f"  - Это ВИДЖЕТ. Его родительская папка: {active_folder_uuid}")
         else:
             # Если кликнули по папке
@@ -111,16 +113,16 @@ class HierarchyController(QObject):
 
     def update_widgets_visibility(self, folder_uuid: str):
         """Управляет видимостью окон MDI на основе активной папки (UUID)."""
-        target_folder = self._clean_uuid(folder_uuid)
+        target_folder = self.id_controller.clean_uuid(folder_uuid)
         widgets_dict = self.state.project_data.get("widgets", {})
 
         print(f"\n  [VISIBILITY TRACE] Начало обновления видимости для папки (Cleaned): '{target_folder}'")
 
         for w_uuid, descriptor in widgets_dict.items():
-            clean_w_uuid = self._clean_uuid(w_uuid)
+            clean_w_uuid = self.id_controller.clean_uuid(w_uuid)
 
             # 🔥 КРИТИЧЕСКИ ВАЖНО: обязательно очищаем parent_uuid, чтобы сравнивать чистые строки
-            parent_uuid = self._clean_uuid(descriptor.get("parent_block_uuid"))
+            parent_uuid = self.id_controller.clean_uuid(descriptor.get("parent_block_uuid"))
 
             # Для красивого вывода в консоль
             title = descriptor.get('title', clean_w_uuid)
