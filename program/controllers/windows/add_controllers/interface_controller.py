@@ -1,6 +1,7 @@
 import re
 from PyQt6.QtCore import QObject, Qt, QRect
 from PyQt6.QtGui import QStandardItem
+from ...small_controllers import UuidController
 
 
 class InterfaceController(QObject):
@@ -14,6 +15,7 @@ class InterfaceController(QObject):
         self.win = main_window
         self.state = project_state
         self.factory = widget_factory
+        self.id_controller = UuidController()
         # Слушаем сигнал успешной загрузки данных из ProjectIO/Lifecycle
         self.state.sig_project_loaded.connect(self.rebuild_interface)
 
@@ -36,7 +38,7 @@ class InterfaceController(QObject):
         # Ищем активное окно
         active_sub = mdi_area.activeSubWindow()
         if active_sub and active_sub.widget():
-            active_uuid = str(getattr(active_sub.widget(), 'uuid', ''))
+            active_uuid = self.id_controller.clean_uuid(getattr(active_sub.widget(), 'uuid', ''))
 
         # Собираем геометрию всех живых окон
         for sub_window in mdi_area.subWindowList():
@@ -44,7 +46,7 @@ class InterfaceController(QObject):
             if not widget:
                 continue
 
-            uuid_str = str(getattr(widget, 'uuid', ''))
+            uuid_str = self.id_controller.clean_uuid(getattr(widget, 'uuid', ''))
             rect = sub_window.geometry()
             is_maximized = bool(sub_window.windowState() & Qt.WindowState.WindowMaximized)
 
@@ -124,7 +126,7 @@ class InterfaceController(QObject):
         if not node_data:
             return
 
-        uuid_str = node_data.get("uuid")
+        uuid_str = self.id_controller.clean_uuid(node_data.get("uuid"))
         name = node_data.get("text", "Unnamed Node")
         node_type = node_data.get("type")
 
@@ -162,7 +164,7 @@ class InterfaceController(QObject):
         print("\n[DEBUG INTERFACE] >>> Запуск финального восстановления интерфейса")
         workspace = self.state.project_data.get("workspace", {})
         positions = workspace.get("mdi_positions", {})
-        active_uuid = workspace.get("active_widget_uuid")
+        active_uuid = self.id_controller.clean_uuid(workspace.get("active_widget_uuid"))
 
         mdi_area = getattr(self.win, 'widgets_area', None)
         if not mdi_area:
@@ -173,7 +175,7 @@ class InterfaceController(QObject):
 
         for sub_window in sub_windows:
             widget = sub_window.widget()
-            uuid_str = str(getattr(widget, 'uuid', ''))
+            uuid_str = self.id_controller.clean_uuid(getattr(widget, 'uuid', ''))
 
             # --- ПРИМЕНЕНИЕ ГЕОМЕТРИИ ---
             geom_data = positions.get(uuid_str)

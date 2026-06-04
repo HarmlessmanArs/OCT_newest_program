@@ -71,24 +71,32 @@ class RuntimeRegistry(QObject):
     def unregister_and_destroy(self, uuid_str: str):
         """
         Единый пайплайн удаления (Этап 9).
+        Абсолютно безопасен к "мертвым" C++ объектам.
         """
-        uuid_str = self._clean_uuid(uuid_str)  # <--- ФИКС 6
+        uuid_str = self._clean_uuid(uuid_str)
 
-        # 1. Безопасно извлекаем MDI контейнер
+        # 1. Безопасно извлекаем MDI контейнер из словаря
         sub = self._sub_windows.pop(uuid_str, None)
 
         if sub:
-            widget_window = sub.widget()
-            if widget_window and hasattr(widget_window, '_force_close'):
-                widget_window._force_close = True
-
             try:
+                # ВАЖНО: Оборачиваем ВСЕ взаимодействия с sub.
+                # Если C++ объект уже удален со стороны QMdiArea, тут вылетит RuntimeError,
+                # который мы успешно перехватим ниже.
+                widget_window = sub.widget()
+                if widget_window and hasattr(widget_window, '_force_close'):
+                    widget_window._force_close = True
+
                 sub.close()
                 sub.deleteLater()
             except RuntimeError:
+                # Сюда мы попадаем, если Qt уже удалил окно из памяти.
+                # Нам делать ничего не нужно — объект и так уничтожен, мы просто идем дальше.
                 pass
 
-                # 2. Безопасно удаляем ссылку на сам виджет рабочих модулей
+        # 2. Безопасно удаляем ссылку на сам виджет рабочих модулей
+        # Метод .pop() со значением по умолчанию никогда не вызовет ошибку,
+        # даже если ключа нет или объект внутри мертв.
         self._widgets.pop(uuid_str, None)
 
     def clear_all(self):
