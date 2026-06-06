@@ -25,6 +25,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.graph_count = 1
         self.table_count = 1
         self.app_name = 'OCT project'
+        self._close_requested_after_save: bool | None = None
 
         # 2. Инициализация State и реакция на него
         self.project_state = ProjectState()
@@ -108,3 +109,77 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if not self.project_state.project_data.get("hierarchy"):
             init_folder = self.widget_factory.create_folder("Folder 0")
             self.file_info.setCurrentIndex(self.tree_model.indexFromItem(init_folder))
+
+        self.project_state.set_modified(False)
+        self.update_window_title()
+
+    def closeEvent(self, event):
+        """
+        Перехватывает закрытие программы.
+        Реализует трехкнопочный диалог: Yes (Сохранить), No (Не сохранять), Cancel (Отмена)
+        с учетом фонового асинхронного сохранения.
+        """
+        # Если проект НЕ изменен (или мы закрываемся ПОВТОРНО после успешного сохранения)
+        if not getattr(self.project_state, 'modified', False):
+            # Выполняем финальный пайплайн очистки
+            if hasattr(self, 'io_controller'):
+                self.io_controller.close_all_windows_silently()
+
+            if hasattr(self.project_state, 'project_reader') and self.project_state.project_reader:
+                try:
+                    self.project_state.project_reader.close()
+                except:
+                    pass
+
+            event.accept()  # Закрываем программу
+            return
+
+        # Если изменения есть, показываем классический трехкнопочный диалог
+        from PyQt6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self,
+            "Unsaved Changes",
+            "The current project has unsaved changes. Do you want to save changes before exiting?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Yes  # Кнопка по умолчанию
+        )
+
+        # Сценарий 1: Отмена — просто остаемся в программе
+        if reply == QMessageBox.StandardButton.Cancel:
+            event.ignore()
+            return
+
+        # Сценарий 2: Выйти без сохранения
+        elif reply == QMessageBox.StandardButton.No:
+            # Принудительно сбрасываем флаг modified, чтобы повторный вызов close() прошел без вопросов
+            self.project_state.set_modified(False)
+
+            if hasattr(self, 'io_controller'):
+                self.io_controller.close_all_windows_silently()
+
+            if hasattr(self.project_state, 'project_reader') and self.project_state.project_reader:
+                try:
+                    self.project_state.project_reader.close()
+                except:
+                    pass
+
+            event.accept()
+            return
+
+        # Сценарий 3: Сохранить и выйти
+        elif reply == QMessageBox.StandardButton.Yes:
+            # Взводим флаг: "Когда фоновый поток закончит сохранение, нужно закрыть приложение"
+            self._close_requested_after_save = True
+
+            # Запускаем сохранение (методы теперь возвращают True, если процесс пошел,
+            # и False, если пользователь нажал Отмена в QFileDialog)
+            save_started = self.io_controller.on_save_project()
+
+            if not save_started:
+                # Если пользователь передумал на этапе выбора папки, сбрасываем флаг закрытия
+                self._close_requested_after_save = False
+
+            # В любом случае ИГНОРИРУЕМ текущее событие закрытия.
+            # Окно закроется позже автоматически из недр IO-контроллера.
+            event.ignore()
+            return

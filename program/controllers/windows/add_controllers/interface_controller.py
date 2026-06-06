@@ -173,65 +173,58 @@ class InterfaceController(QObject):
             self._reconstruct_ui_layer(child_node, next_parent)
 
     def _restore_workspace_geometry(self):
-        """Применяет сохраненную геометрию, открывает окна текущей папки и фокусирует дерево."""
+        """Применяет сохраненную геометрию и фокус с подробной отладкой."""
         print("\n[DEBUG INTERFACE] >>> Запуск финального восстановления интерфейса")
+
         workspace = self.state.project_data.get("workspace", {})
-        positions = workspace.get("mdi_positions", {})
-        active_uuid = self.id_controller.clean_uuid(workspace.get("active_widget_uuid"))
+        raw_active_uuid = workspace.get("active_widget_uuid")
+
+        # Обязательно очищаем UUID, как мы делали это ранее для безопасности типов
+        active_uuid = self.id_controller.clean_uuid(raw_active_uuid) if hasattr(self,
+                                                                                'id_controller') else raw_active_uuid
+
+        print(f"  - Ожидаемый активный UUID из файла: {active_uuid}")
 
         mdi_area = getattr(self.win, 'widgets_area', None)
         if not mdi_area:
+            print("  - [CRITICAL] Не найден widgets_area в главном окне!")
             return
 
         sub_windows = mdi_area.subWindowList()
+        print(f"  - Количество окон, зарегистрированных в QMdiArea прямо сейчас: {len(sub_windows)}")
+
         target_active_sub = None
 
-        # Шаг 1: Находим UUID родительской папки для активного виджета из состояния
-        widgets_dict = self.state.project_data.get("widgets", {})
-        active_descriptor = widgets_dict.get(active_uuid) or {}
-        # Фабрика сохраняет связь в parent_block_uuid
-        target_folder_uuid = self.id_controller.clean_uuid(active_descriptor.get("parent_block_uuid", ""))
+        if active_uuid:
+            for sub_window in sub_windows:
+                widget = sub_window.widget()
+                uuid_str = str(getattr(widget, 'uuid', ''))
+                # Если id_controller доступен, лучше использовать его для очистки uuid_str
+                if hasattr(self, 'id_controller'):
+                    uuid_str = self.id_controller.clean_uuid(uuid_str)
 
-        print(f"  - Активный виджет: {active_uuid}, Его папка: {target_folder_uuid}")
+                print(
+                    f"    * Проверяем живое окно MDI: '{sub_window.windowTitle()}' | UUID: {uuid_str} | Видимость: {sub_window.isVisible()}")
 
-        # Шаг 2: Проходим по всем окнам MDI
-        for sub_window in sub_windows:
-            widget = sub_window.widget()
-            if not widget:
-                continue
+                if uuid_str == active_uuid:
+                    target_active_sub = sub_window
+                    print(f"      -> Матч! Это окно должно стать активным.")
+                    break
 
-            uuid_str = self.id_controller.clean_uuid(getattr(widget, 'uuid', ''))
-            # В фабрике вы передаете parent_block_uuid в параметр 'linked' окна
-            folder_uuid = self.id_controller.clean_uuid(getattr(widget, 'linked', ''))
-
-            # --- ПРИМЕНЕНИЕ ГЕОМЕТРИИ (используем ключи rect и maximized) ---
-            geom_data = positions.get(uuid_str)
-            if geom_data:
-                rect_data = geom_data.get("rect")
-                if rect_data and len(rect_data) == 4:
-                    w, h = max(100, rect_data[2]), max(100, rect_data[3])
-                    sub_window.setGeometry(QRect(rect_data[0], rect_data[1], w, h))
-
-                if geom_data.get("maximized"):
-                    sub_window.setWindowState(Qt.WindowState.WindowMaximized)
-            # -----------------------------------------------------------------
-
-            # КРИТИЧЕСКИЙ ВЫЗОВ: Если виджет находится в той же папке, что и активный — показываем его окно!
-            if target_folder_uuid and folder_uuid == target_folder_uuid:
-                sub_window.show()
-
-            if uuid_str == active_uuid:
-                target_active_sub = sub_window
-
-        # Шаг 3: Активируем главное окно
         if target_active_sub:
-            print(f"  - Активируем окно на переднем плане: '{target_active_sub.windowTitle()}'")
+            print(f"  - Активируем окно: '{target_active_sub.windowTitle()}'")
             mdi_area.setActiveSubWindow(target_active_sub)
             target_active_sub.show()
 
-        # Шаг 4: Синхронизируем дерево проекта (передаем точное управление)
-        if active_uuid:
-            self._select_item_in_tree_by_uuid(active_uuid)
+            # Если у тебя есть метод программного выделения конкретного виджета в дереве, вызываем его здесь:
+            if hasattr(self, '_select_item_in_tree_by_uuid'):
+                self._select_item_in_tree_by_uuid(active_uuid)
+
+        else:
+            print("  - [WARN] Окно с active_uuid не найдено. Включаем отображение ПЕРВОЙ ПАПКИ (Fallback).")
+            # ФОЛЛБЭК: Если виджет не найден или active_uuid пуст, выделяем первую папку
+            if hasattr(self.win, 'hierarchy_controller'):
+                self.win.hierarchy_controller.ensure_active_folder_selection()
 
         print("[DEBUG INTERFACE] <<< Завершение работы восстановления интерфейса\n")
 

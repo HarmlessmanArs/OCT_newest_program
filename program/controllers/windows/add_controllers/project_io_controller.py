@@ -1,11 +1,10 @@
 from pathlib import Path
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 from PyQt6.QtCore import QObject, pyqtSlot
-import pprint
 
 from ....project_storage.io.saver import SaveProjectWorker
 from ....project_storage.io.loader import LoadProjectWorker
-from ....project_storage.io.reader import ProjectReader  # Импортируем ридер для переоткрытия файлов
+from ....project_storage.io.reader import ProjectReader
 from ....utils.types_restore import restore_snapshot_types
 
 
@@ -28,16 +27,19 @@ class ProjectIOController(QObject):
             self.win.actionOpen_project.triggered.connect(self.on_open_project)
         if hasattr(self.win, 'actionNew'):
             self.win.actionNew.triggered.connect(self.on_new_project)
+        if hasattr(self.win, 'actionQuit'):
+            self.win.actionQuit.triggered.connect(self.win.close)
 
     @pyqtSlot()
-    def on_save_project(self):
+    def on_save_project(self) -> bool:
         if self.state.current_path is None:
-            self.on_save_project_as()
+            return self.on_save_project_as()  # Возвращаем результат метода "As"
         else:
             self._execute_background_save(self.state.current_path)
+            return True  # Сохранение успешно стартовало
 
     @pyqtSlot()
-    def on_save_project_as(self):
+    def on_save_project_as(self) -> bool:
         default_name = "Default_project.bmip"
         start_dir = self.state.current_path.parent if self.state.current_path else self.state.user_settings.last_save_project_folder
 
@@ -45,13 +47,14 @@ class ProjectIOController(QObject):
             self.win, "Save project as...", str(start_dir / default_name), "BMIP Projects (*.bmip)"
         )
         if not file_path_str:
-            return
+            return False  # Пользователь нажал Отмена в QFileDialog
 
         target_path = Path(file_path_str)
         if target_path.suffix != '.bmip':
             target_path = target_path.with_suffix('.bmip')
 
         self._execute_background_save(target_path)
+        return True  # Процесс запущен
 
     def _on_save_completed(self, success: bool, message: str, saved_path: Path):
         self._set_menu_enabled(True)
@@ -60,7 +63,6 @@ class ProjectIOController(QObject):
             self.state.set_path(saved_path)
             self.state.set_modified(False)
 
-            # Восстанавливаем блокировку: открываем новый Reader для сохраненного файла
             try:
                 reader = ProjectReader(saved_path)
                 reader.open()
@@ -70,8 +72,13 @@ class ProjectIOController(QObject):
                                     f"Project saved, but failed to lock file for reading:\n{e}")
 
             self.win.statusBar().showMessage("Project completely saved", 5000)
+
+            # === ДОБАВЛЕНО ДЛЯ ЗАКРЫТИЯ ОКНА ===
+            if getattr(self.win, '_close_requested_after_save', False):
+                self.win._close_requested_after_save = False
+                self.win.close()  # Вызываем закрытие повторно. Теперь modified=False и окно тихо закроется
+
         else:
-            # Если сохранение упало, пытаемся вернуть ридер на старый файл, если он существовал
             if self.state.current_path and self.state.current_path.exists():
                 try:
                     reader = ProjectReader(self.state.current_path)
@@ -79,6 +86,13 @@ class ProjectIOController(QObject):
                     self.state.project_reader = reader
                 except:
                     pass
+
+            # === ДОБАВЛЕНО ДЛЯ БЕЗОПАСНОСТИ ===
+            # Если фоновое сохранение упало с ошибкой, отменяем закрытие приложения,
+            # чтобы пользователь не потерял данные и мог попробовать сохранить в другое место
+            if hasattr(self.win, '_close_requested_after_save'):
+                self.win._close_requested_after_save = False
+
             QMessageBox.critical(self.win, "Saving Error", f"The file could not be saved:\n{message}")
             self.win.statusBar().showMessage("Saving Error", 5000)
 
@@ -119,9 +133,9 @@ class ProjectIOController(QObject):
         self.load_worker.work_finished.connect(self._on_load_completed)
         self.load_worker.start()
 
-    def _close_all_windows_silently(self):
+    def close_all_windows_silently(self):
         """Находит все MDI-окна и закрывает их без вызова QMessageBox."""
-        mdi_area = getattr(self.win, 'mdi_area', getattr(self.win, 'mdiArea', None))
+        mdi_area = getattr(self.win, 'widgets_area', getattr(self.win, 'mdiArea', None))
         if mdi_area:
             for window in mdi_area.subWindowList():
                 widget = window.widget()
@@ -168,7 +182,7 @@ class ProjectIOController(QObject):
         try:
             restored_snapshot = restore_snapshot_types(result)
 
-            self._close_all_windows_silently()
+            self.close_all_windows_silently()
 
             if hasattr(self.state, 'project_reader') and self.state.project_reader:
                 try:
@@ -207,7 +221,7 @@ class ProjectIOController(QObject):
             if reply == QMessageBox.StandardButton.No:
                 return
 
-        self._close_all_windows_silently()
+        self.close_all_windows_silently()
 
         if hasattr(self.state, 'project_reader') and self.state.project_reader:
             try:

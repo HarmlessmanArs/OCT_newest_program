@@ -36,3 +36,16 @@ class UuidController:
             return match.group(0)
 
         return val_str
+
+
+class ImageObj(LinkBase):
+    def __init__(self, link_name: str, link_idx: str, linked: str, file_path: str):
+        """
+        Объект изображения.
+        :param link_name: Имя файла (например, image_1.tiff)
+        :param link_idx: Уникальный чистый UUID самого изображения
+        :param linked: UUID родительского окна (галереи), к которому оно привязано
+        :param file_path: Абсолютный путь к файлу на диске
+        """
+        super().__init__(link_name=link_name, link_idx=link_idx, obj_type='image', linked=linked)
+        self.file_path = file_path
