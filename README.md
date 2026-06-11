@@ -145,8 +145,10 @@ There will also be an option to load existing projects and continue working with
 
 # 5._Tasks (last updated 29.05.26)_
 
-1) Change ~~QTableWidget~~ in table module to QTableView + QAbstractTableModel
-2) Write mathematical modules for (crossed text means this task has been done):
+1) Выбор нескольких изображений
+2) Удаление изображений (задача сложная, так как такое удаление должно полностью стираться из проекта/датасета)
+2) Change ~~QTableWidget~~ in table module to QTableView + QAbstractTableModel
+3) Write mathematical modules for (crossed text means this task has been done):
    1) ~~boundaries extraction~~ need changes in logic
    2) ~~boundaries calculation~~
    3) ~~average intensity~~
@@ -158,5 +160,5 @@ There will also be an option to load existing projects and continue working with
       3) v3
 
 
-
 # 6._Bags (last updated 31.05.26)_
+1) Data and shape parameters при сохранении

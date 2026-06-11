@@ -18,8 +18,10 @@ def sanitize_snapshot(obj):
         return int(obj)
     elif isinstance(obj, (np.floating, np.float32, np.float64)):
         return float(obj)
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
+
+    # ВАЖНО: Мы больше не трогаем np.ndarray!
+    # Оставляем сырые массивы для Zarr, чтобы не сжигать ОЗУ.
+
     return obj
 
 
@@ -53,12 +55,11 @@ class SaveProjectWorker(QThread):
             clean_snapshot = sanitize_snapshot(self.snapshot)
             print(f"[DEBUG SAVER] Ключи снапшота ПОСЛЕ очистки: {list(clean_snapshot.keys())}")
 
-            # 2. Удаление старого файла
-            if self.target_path.exists():
-                print("[DEBUG SAVER] Обнаружен старый файл. Удаляем для перезаписи...")
-                self.target_path.unlink(missing_ok=True)
+            # ВАЖНО: Мы убрали блок удаления старого файла!
+            # Теперь старый архив остается нетронутым, чтобы ленивые массивы могли из него читаться.
+            # Замену файлов безопасно выполнит ProjectWriter в самом конце.
 
-            # 3. Передача писателю
+            # 2. Передача писателю
             print("[DEBUG SAVER] Передача данных в ProjectWriter...")
             writer = ProjectWriter(self.target_path)
             writer.write(clean_snapshot, progress_callback=self.progress.emit)

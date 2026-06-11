@@ -99,6 +99,7 @@ class LoadProjectWorker(QThread):
             else:
                 print("[DEBUG LOADER] Тяжелые блоки данных (blocks) отсутствуют в файле.")
 
+            reader.close()
             self.progress.emit(100)
             print("[DEBUG LOADER] >>> ПОТОК ЗАГРУЗКИ СФОРМИРОВАЛ СНАПШОТ УСПЕШНО <<<")
             print("=" * 60 + "\n")

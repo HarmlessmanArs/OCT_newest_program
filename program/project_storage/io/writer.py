@@ -3,6 +3,9 @@ from zarr.storage import ZipStore
 import numpy as np
 from pathlib import Path
 import warnings
+import os
+import time
+import psutil
 
 
 class ProjectWriter:
@@ -62,12 +65,55 @@ class ProjectWriter:
 
                 print("  [DEBUG WRITER] Закрытие ZipStore и финализация ZIP...")
                 store.close()
+                proc = psutil.Process(os.getpid())
 
-            # 3. Атомарная замена файла на диске
-            if self.target_path.exists():
-                self.target_path.unlink()
-            tmp_path.rename(self.target_path)
-            print(f"  [DEBUG WRITER] Временный файл успешно переименован в {self.target_path}")
+                print("=== OPEN FILES ===")
+                for f in proc.open_files():
+                    if ".bmip" in f.path.lower():
+                        print(f.path)
+                # --- ИСПРАВЛЕННЫЙ БЛОК АТОМАРНОЙ ЗАМЕНЫ ---
+                max_retries = 5
+                success = False
+
+                for attempt in range(max_retries):
+                    try:
+                        # target = str(self.target_path)
+                        #
+                        # for proc in psutil.process_iter(['pid', 'name']):
+                        #     try:
+                        #         for f in proc.open_files():
+                        #             if target.lower() in f.path.lower():
+                        #                 print(
+                        #                     f"HOLDER PID={proc.pid} "
+                        #                     f"NAME={proc.name()} "
+                        #                     f"FILE={f.path}"
+                        #                 )
+                        #     except Exception:
+                        #         pass
+                        os.replace(tmp_path, self.target_path)
+                        print(f"  [DEBUG WRITER] Файл успешно заменен: {self.target_path}")
+                        success = True
+                        break
+                    except PermissionError as e:
+                        if attempt < max_retries - 1:
+                            print(f"  [DEBUG WRITER] Файл занят, повтор {attempt + 1}/{max_retries}...")
+                            time.sleep(0.2)  # Ждем 200 мс перед следующей попыткой
+                            continue
+                        else:
+                            print(f"  [DEBUG WRITER] ❌ Ошибка атомарной замены после {max_retries} попыток: {e}")
+                            # Если все попытки провалены, очищаем временный файл, чтобы не оставлять мусор
+                            if tmp_path.exists():
+                                try:
+                                    tmp_path.unlink()
+                                except:
+                                    pass
+                            raise RuntimeError(f"Критическая ошибка при записи .bmip: {str(e)}")
+
+                # # 3. Атомарная замена файла на диске
+                # if self.target_path.exists():
+                #     self.target_path.unlink()
+                # tmp_path.rename(self.target_path)
+                # print(f"  [DEBUG WRITER] Временный файл успешно переименован в {self.target_path}")
 
         except Exception as e:
             if store:
@@ -120,29 +166,52 @@ class ProjectWriter:
                 for item_uuid, array_data in p_content['array'].items():
                     self._save_heavy_array(array_param_group, str(item_uuid), array_data)
 
-    def _save_heavy_array(self, parent_group: zarr.Group, name: str, data):
-        if not isinstance(data, np.ndarray):
-            data = np.array(data)
+    @staticmethod
+    def _save_heavy_array(parent_group: zarr.Group, name: str, data):
+        # 1. Извлекаем реальный массив и метаданные, если к нам пришел словарь
+        metadata = {}
+        if isinstance(data, dict):
+            actual_array = data.get("data")
+            # Сохраняем остальные ключи (например, "name") как метаданные
+            metadata = {k: v for k, v in data.items() if k != "data"}
+        else:
+            actual_array = data
 
-        if data.size == 0:
+        # Защита от пустых данных (если data в словаре был None)
+        if actual_array is None:
             return
 
-        if data.ndim == 3:
-            chunks = (1, data.shape[1], data.shape[2])
-        elif data.ndim == 2:
-            chunks = (max(1, data.shape[0] // 10), data.shape[1])
+        # ФИКС: Если это ленивый массив из загруженного проекта, выгружаем его полностью!
+        if hasattr(actual_array, 'load_fully'):
+            actual_array = actual_array.load_fully()
+
+        # Теперь безопасно приводим к numpy, зная, что это реальные данные, а не словарь
+        if not isinstance(actual_array, np.ndarray):
+            actual_array = np.array(actual_array)
+
+        if actual_array.size == 0:
+            return
+
+        if actual_array.ndim == 3:
+            chunks = (1, actual_array.shape[1], actual_array.shape[2])
+        elif actual_array.ndim == 2:
+            chunks = (max(1, actual_array.shape[0] // 10), actual_array.shape[1])
         else:
             chunks = None
 
-        parent_group.create_array(
+        # 2. Создаем массив Zarr (используем только извлеченный actual_array)
+        z_array = parent_group.create_array(
             name=name,
-            shape=data.shape,
-            dtype=str(data.dtype),
-            data=data,
+            data=actual_array,
             chunks=chunks
         )
 
-    def _pad_jagged_list(self, jagged_list: list) -> np.ndarray:
+        # 3. Записываем метаданные ("name" и др.) в атрибуты Zarr-массива
+        for meta_key, meta_value in metadata.items():
+            z_array.attrs[meta_key] = meta_value
+
+    @staticmethod
+    def _pad_jagged_list(jagged_list: list) -> np.ndarray:
         max_len = max(len(row) for row in jagged_list)
         padded = np.full((len(jagged_list), max_len), np.nan, dtype=np.float32)
         for i, row in enumerate(jagged_list):

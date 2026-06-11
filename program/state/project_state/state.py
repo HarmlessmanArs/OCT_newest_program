@@ -5,6 +5,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 from .constants import WidgetTypes
 from ...utils.paths import UserSettingsState
+from ..dataset_state.gallery_state import GalleryStateManager
 
 
 class ProjectState(QObject):
@@ -41,11 +42,11 @@ class ProjectState(QObject):
             },
             "datablocks": {}  # <-- Здесь будет жить структура из SAVE.md
         }
-
+        self.gallery = GalleryStateManager(self)
         self.reset_to_new()
 
     @staticmethod
-    def _clean_uuid(val) -> str:
+    def clean_uuid(val) -> str:
         """
         Извлекает чистую строку UUID в формате {xxxx-xxxx...} из любых объектов.
         Гарантирует 100% совпадение ключей при сохранении и загрузке.
@@ -120,7 +121,7 @@ class ProjectState(QObject):
         """
         Создает новый пустой датаблок по стандарту SAVE.md.
         """
-        block_uuid = self._clean_uuid(block_uuid)
+        block_uuid = self.clean_uuid(block_uuid)
 
         if block_uuid in self.project_data["datablocks"]:
             return
@@ -146,17 +147,27 @@ class ProjectState(QObject):
         self.set_modified(True)
 
     def get_datablock(self, block_uuid: str) -> dict:
-        """Возвращает датаблок по его UUID или пустой словарь."""
-        block_uuid = self._clean_uuid(block_uuid)
-        return self.project_data["datablocks"].get(block_uuid, {})
+        """Возвращает датаблок по его UUID или пустой словарь.
+        Устойчив к несовпадению типов (QUuid vs str)."""
+        target_uuid = self.clean_uuid(block_uuid)
+        datablocks = self.project_data.get("datablocks", {})
+
+        # Бронебойный поиск: прогоняем все ключи через clean_uuid
+        for key, block_content in datablocks.items():
+            if self.clean_uuid(key) == target_uuid:
+                return block_content
+
+        print(
+            f"  [DEBUG STATE] ❌ Датаблок {target_uuid} не найден в памяти! Доступные ключи: {list(datablocks.keys())}")
+        return {}
 
     # =========================================================================
     # БЕЗОПАСНЫЕ CRUD-ОПЕРАЦИИ С ИНТЕРФЕЙСОМ (Со строгой типизацией UUID)
     # =========================================================================
 
     def add_folder_descriptor(self, folder_uuid: str, text: str, parent_uuid: str = None):
-        folder_uuid = self._clean_uuid(folder_uuid)
-        parent_uuid = self._clean_uuid(parent_uuid) if parent_uuid else None
+        folder_uuid = self.clean_uuid(folder_uuid)
+        parent_uuid = self.clean_uuid(parent_uuid) if parent_uuid else None
 
         if any(f["uuid"] == folder_uuid for f in self.project_data["hierarchy"]):
             return
@@ -170,7 +181,7 @@ class ProjectState(QObject):
         self.set_modified(True)
 
     def remove_folder_descriptor(self, folder_uuid: str):
-        folder_uuid = self._clean_uuid(folder_uuid)
+        folder_uuid = self.clean_uuid(folder_uuid)
         self.project_data["hierarchy"] = [
             f for f in self.project_data["hierarchy"] if f["uuid"] != folder_uuid
         ]
@@ -178,8 +189,8 @@ class ProjectState(QObject):
 
     def add_widget_descriptor(self, widget_uuid: str, widget_type: str, title: str, parent_block_uuid: str = None,
                               settings: dict = None):
-        widget_uuid = self._clean_uuid(widget_uuid)
-        parent_block_uuid = self._clean_uuid(parent_block_uuid) if parent_block_uuid else None
+        widget_uuid = self.clean_uuid(widget_uuid)
+        parent_block_uuid = self.clean_uuid(parent_block_uuid) if parent_block_uuid else None
 
         if widget_uuid in self.project_data["widgets"]:
             return
@@ -194,7 +205,7 @@ class ProjectState(QObject):
         self.set_modified(True)
 
     def remove_widget_descriptor(self, widget_uuid: str):
-        widget_uuid = self._clean_uuid(widget_uuid)
+        widget_uuid = self.clean_uuid(widget_uuid)
         if widget_uuid in self.project_data["widgets"]:
             del self.project_data["widgets"][widget_uuid]
 
@@ -204,7 +215,7 @@ class ProjectState(QObject):
             self.set_modified(True)
 
     def update_widget_settings(self, widget_uuid: str, settings_update: dict):
-        widget_uuid = self._clean_uuid(widget_uuid)
+        widget_uuid = self.clean_uuid(widget_uuid)
         if widget_uuid in self.project_data["widgets"]:
             self.project_data["widgets"][widget_uuid]["settings"].update(settings_update)
             self.set_modified(True)
@@ -214,11 +225,11 @@ class ProjectState(QObject):
     # =========================================================================
 
     def update_workspace_state(self, active_uuid: str | None, positions: dict):
-        active_uuid = self._clean_uuid(active_uuid) if active_uuid else None
+        active_uuid = self.clean_uuid(active_uuid) if active_uuid else None
         self.project_data["workspace"]["active_widget_uuid"] = active_uuid
 
         # Очищаем ключи позиций на всякий случай
-        clean_positions = {self._clean_uuid(k): v for k, v in positions.items()}
+        clean_positions = {self.clean_uuid(k): v for k, v in positions.items()}
         self.project_data["workspace"]["mdi_positions"].update(clean_positions)
 
         self.sig_workspace_changed.emit()
@@ -253,20 +264,20 @@ class ProjectState(QObject):
 
         if node_type == "folder":
             self.project_data["hierarchy"].append({
-                "uuid": self._clean_uuid(node.get("uuid")),
+                "uuid": self.clean_uuid(node.get("uuid")),
                 "type": "folder",
                 "text": node.get("text", "Folder"),
                 "parent_uuid": None  # Совместимость со старым форматом
             })
 
         elif node_type == "widget" or (node_type and "widget" in str(node_type)):
-            w_uuid = self._clean_uuid(node.get("uuid"))
+            w_uuid = self.clean_uuid(node.get("uuid"))
             if w_uuid:
                 self.project_data["widgets"][w_uuid] = {
                     "uuid": w_uuid,
                     "type": node.get("widget_type") or node_type,
                     "title": node.get("text") or node.get("title", "Window"),
-                    "parent_block_uuid": self._clean_uuid(node.get("parent_block_uuid")),
+                    "parent_block_uuid": self.clean_uuid(node.get("parent_block_uuid")),
                     "settings": node.get("settings") or {}
                 }
 
