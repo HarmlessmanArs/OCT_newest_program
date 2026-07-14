@@ -39,39 +39,46 @@ class GalleryWindow(WidgetsWindow):
         if not self.state:
             return
 
-        # 1. Получаем стартовую директорию из пользовательских настроек
         start_folder = str(self.state.user_settings.last_open_folder)
-
-        # Открываем диалог, передавая стартовую директорию
         file_paths, _ = QFileDialog.getOpenFileNames(
-            self,
-            "Select Images",
-            start_folder,
-            "Images (*.tiff *.tif *.png *.jpg *.jpeg *.bmp)"
+            self, "Select Images", start_folder, "Images (*.tiff *.tif *.png *.jpg *.jpeg *.bmp)"
         )
 
         if not file_paths:
             return
 
-        # 2. Сохраняем новую директорию в настройки
         selected_folder = Path(file_paths[0]).parent
         self.state.user_settings.last_open_folder = selected_folder
-        self.state.user_settings.save()  # Физически записываем в paths.json
+        self.state.user_settings.save()
 
         datablock_uuid = self.linked
 
+        # 🔥 БАГ 3: Защита от дубликатов. Собираем уже существующие имена.
+        saved_images = self.state.gallery.get_original_images(datablock_uuid)
+        existing_names = set()
+        for img_data in saved_images.values():
+            if isinstance(img_data, dict) and "name" in img_data:
+                existing_names.add(img_data["name"])
+
         for path_str in file_paths:
             path = Path(path_str)
+
+            # Проверка на совпадение имени
+            if path.name in existing_names:
+                QtWidgets.QMessageBox.warning(self, "Дубликат",
+                                              f"Изображение '{path.name}' уже есть в галерее. Пропуск.")
+                continue
+
+            existing_names.add(path.name)  # Добавляем, чтобы не загрузить дубли за один раз
+
             raw_uuid = QUuid.createUuid()
             img_uuid = UuidController.clean_uuid(raw_uuid)
 
-            # Считываем картинку как numpy массив (сохраняя глубину цвета, например 16-бит)
             img_array = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
             if img_array is None:
                 print(f"[WARN] Не удалось прочитать файл: {path.name}")
                 continue
 
-            # Передаем массив в State (он пойдет на запись в Zarr)
             self.state.gallery.add_original_image(
                 datablock_uuid=datablock_uuid,
                 img_uuid=img_uuid,
@@ -79,7 +86,6 @@ class GalleryWindow(WidgetsWindow):
                 img_array=img_array
             )
 
-            # Рисуем иконку
             item = QStandardItem(path.name)
             item.setIcon(QIcon(str(path)))
             item.setData(img_uuid, Qt.ItemDataRole.UserRole)
@@ -88,54 +94,38 @@ class GalleryWindow(WidgetsWindow):
     def _load_images_from_state(self):
         """Восстановление галереи: достаем массивы из датаблока и делаем из них иконки."""
         clean_linked = UuidController.clean_uuid(self.linked)
-
-        print(f"\n[DEBUG GALLERY] Запуск восстановления изображений.")
-        print(f" -> Ищем датаблок по UUID: '{clean_linked}'")
-
         if not self.state or not clean_linked:
-            print(" -> [WARN] State или Linked отсутствуют. Выход.")
             return
 
         saved_images = self.state.gallery.get_original_images(clean_linked)
-        print(f" -> Найдено изображений в State: {len(saved_images)}")
 
         for img_uuid, img_data in saved_images.items():
+            file_name = None
+            array_data = None
 
-            # 🔥 ТОЧЕЧНЫЙ ФИКС: УНИВЕРСАЛЬНАЯ РАСПАКОВКА ДАННЫХ
+            # 🔥 БАГ 1: Бронебойная логика вытягивания имени
             if isinstance(img_data, dict):
-                # Стандартный сценарий (после ProjectReader): словарь {name: ..., data: ...}
-                file_name = img_data.get("name", f"Image_{img_uuid[:8]}")
+                file_name = img_data.get("name")
                 array_data = img_data.get("data")
-            elif isinstance(img_data, np.ndarray):
-                # Сценарий для только что загруженных в текущей сессии картинок
-                array_data = img_data
-                # Пытаемся вытащить имя, если State хранит метаданные отдельно, либо ставим дефолт
-                file_name = f"Image_{img_uuid[:8]}"
             else:
-                # Альтернативный сценарий: напрямую передан LazyBmipArray
                 array_data = img_data
-                file_name = f"Image_{img_uuid[:8]}"
 
-            # Пытаемся вытащить оригинальное имя прямо из атрибутов Zarr-архива
-            if hasattr(array_data, '_load_array'):
+            # Если мы всё еще не знаем имя (старый формат), лезем в Zarr
+            if not file_name and hasattr(array_data, '_load_array'):
                 try:
                     z_arr = array_data._load_array()
-                    file_name = dict(z_arr.attrs).get("name", file_name)
+                    file_name = dict(z_arr.attrs).get("name")
                 except Exception as e:
-                    print(f" -> [WARN] Не удалось прочитать атрибуты Zarr для {img_uuid}: {e}")
+                    print(f" -> [WARN] Ошибка извлечения имени из Zarr: {e}")
 
-            print(f" -> Рендер иконки для: {file_name} (UUID: {img_uuid})")
+            # Если вообще ничего не помогло, ставим UUID (но теперь должно помогать всегда)
+            file_name = file_name or f"Image_{img_uuid[:8]}"
 
             item = QStandardItem(file_name)
-
-            # Превращаем сырой/ленивый массив в красивую иконку
             icon = self._create_icon_from_array(array_data)
             item.setIcon(icon)
-
             item.setData(img_uuid, Qt.ItemDataRole.UserRole)
             self.images_model.appendRow(item)
-
-        print("[DEBUG GALLERY] Восстановление изображений завершено.\n")
 
     @staticmethod
     def _create_icon_from_array(array_data) -> QIcon:

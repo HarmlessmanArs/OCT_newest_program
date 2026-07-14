@@ -45,7 +45,8 @@ class InterfaceController(QObject):
             if not widget:
                 continue
 
-            uuid_str = self.id_controller.clean_uuid(getattr(widget, 'uuid', ''))
+            uuid_raw = getattr(widget, 'uuid', getattr(widget, 'link_idx', ''))
+            uuid_str = self.id_controller.clean_uuid(uuid_raw)
             rect = sub_window.geometry()
             is_maximized = bool(sub_window.windowState() & Qt.WindowState.WindowMaximized)
 
@@ -198,7 +199,8 @@ class InterfaceController(QObject):
         if active_uuid:
             for sub_window in sub_windows:
                 widget = sub_window.widget()
-                uuid_str = str(getattr(widget, 'uuid', ''))
+                uuid_raw = getattr(widget, 'uuid', getattr(widget, 'link_idx', ''))
+                uuid_str = self.id_controller.clean_uuid(uuid_raw)
                 # Если id_controller доступен, лучше использовать его для очистки uuid_str
                 if hasattr(self, 'id_controller'):
                     uuid_str = self.id_controller.clean_uuid(uuid_str)

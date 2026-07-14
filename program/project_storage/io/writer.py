@@ -189,8 +189,8 @@ class ProjectWriter:
         )
 
         # 3. Записываем метаданные в атрибуты Zarr-массива
-        for meta_key, meta_value in metadata.items():
-            z_array.attrs[meta_key] = meta_value
+        if metadata:
+            z_array.attrs.update(metadata)  # 🔥 ФИКС: Используем атомарный update вместо цикла
 
     @staticmethod
     def _pad_jagged_list(jagged_list: list) -> np.ndarray:

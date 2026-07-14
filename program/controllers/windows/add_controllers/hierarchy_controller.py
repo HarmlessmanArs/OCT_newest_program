@@ -24,29 +24,6 @@ class HierarchyController(QObject):
         self.win.widgets_area.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.win.widgets_area.customContextMenuRequested.connect(self.open_mdi_context_menu)
 
-    # @staticmethod
-    # def _clean_uuid(val) -> str:
-    #     """
-    #     Извлекает чистую строку UUID в формате {xxxx-xxxx...} из любых объектов.
-    #     Гарантирует 100% совпадение ключей.
-    #     """
-    #     if not val:
-    #         return ""
-    #
-    #     # Если это PyQt-объект QUuid, используем его родной метод
-    #     if hasattr(val, 'toString'):
-    #         return val.toString()
-    #
-    #     val_str = str(val)
-    #
-    #     # Если это замусоренная строка (например, repr от QUuid), вытаскиваем суть
-    #     import re
-    #     match = re.search(r'\{[0-9a-fA-F\-]{36}\}', val_str)
-    #     if match:
-    #         return match.group(0)
-    #
-    #     return val_str
-
     def open_mdi_context_menu(self, position):
         menu = QMenu()
         create_folder_action = menu.addAction("Create folder")
@@ -242,23 +219,27 @@ class HierarchyController(QObject):
 
     def execute_deletion_pipeline(self, uuid_str: str):
         """Централизованный конвейер уничтожения объектов."""
-        uuid_str = str(uuid_str)  # <--- ФИКС 1: Принудительное приведение к строке
+        uuid_str = self.id_controller.clean_uuid(uuid_str) # ФИКС: Обязательная очистка
         print("DELETE UUID =", uuid_str)
 
         is_widget = uuid_str in self.state.project_data.get("widgets", {})
         if is_widget:
             self.state.remove_widget_descriptor(uuid_str)
         else:
+            # Это папка. Нужно очистить её датаблок (ФИКС УТЕЧКИ ПАМЯТИ)
+            if uuid_str in self.state.project_data.get("datablocks", {}):
+                del self.state.project_data["datablocks"][uuid_str]
+
             self.state.project_data["hierarchy"] = [
                 f for f in self.state.project_data.get("hierarchy", []) if str(f["uuid"]) != uuid_str
             ]
             self.state.set_modified(True)
 
-        # СИНХРОНИЗАЦИЯ: Удаляем узел из вложенной tree_structure, чтобы он не восстановился при перезаписи
+        # СИНХРОНИЗАЦИЯ
         if "tree_structure" in self.state.project_data:
             self._remove_node_from_tree_structure(self.state.project_data["tree_structure"], uuid_str)
 
-        self.win.runtime_registry.unregister_and_destroy(uuid_str)
+        self.win.runtime_registry.unregister_and_destroy(uuid_str, unregister_from_state=False)
 
         item = self.find_item_by_uuid(uuid_str)
         if item:
