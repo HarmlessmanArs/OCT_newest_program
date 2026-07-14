@@ -50,14 +50,12 @@ class ProjectReader:
             for block_uuid in block_uuids:
                 block_content = blocks_group[block_uuid]
 
-                # Убрали жесткую проверку isinstance(..., zarr.Group)!
-                # Zarr 3.x может оборачивать группы в свои прокси-классы. Проверяем просто наличие .keys()
                 if not hasattr(block_content, 'keys'):
-                    print(f"  [DEBUG READER] ⚠️ {block_uuid} не является группой (нет метода keys). Пропуск.")
+                    print(f" [DEBUG READER] ⚠️ {block_uuid} не является группой. Пропуск.")
                     continue
 
                 block_keys = list(block_content.keys())
-                print(f"  [DEBUG READER] Внутри блока {block_uuid} найдены папки: {block_keys}")
+                print(f" [DEBUG READER] Внутри блока {block_uuid} найдены папки: {block_keys}")
 
                 block_dict = {
                     "metadata": block_content.attrs.get('metadata', {}),
@@ -68,32 +66,31 @@ class ProjectReader:
                     "tables": {},
                 }
 
-                if 'original_images' in block_keys:
-                    imgs_group = block_content['original_images']
-                    img_keys = list(imgs_group.keys())
-                    print(f"  [DEBUG READER] 📸 В original_images найдено файлов: {len(img_keys)} -> {img_keys}")
+                # 🔥 ТОЧЕЧНЫЙ ФИКС: Универсальный сбор всех категорий изображений/таблиц
+                categories_to_load = ["original_images", "boundaries_images", "mu_t_images", "tables"]
 
-                    for img_uuid in img_keys:
-                        z_array = imgs_group[img_uuid]
+                for category in categories_to_load:
+                    if category in block_keys:
+                        cat_group = block_content[category]
+                        item_keys = list(cat_group.keys())
+                        print(f" [DEBUG READER] 📂 В {category} найдено файлов: {len(item_keys)}")
 
-                        # Безопасное чтение атрибутов
-                        try:
-                            attrs_dict = dict(z_array.attrs)
-                            img_name = attrs_dict.get("name", f"Image_{img_uuid[:8]}")
-                        except Exception as e:
-                            print(f"  [DEBUG READER] ⚠️ Ошибка чтения атрибутов для {img_uuid}: {e}")
-                            img_name = f"Image_{img_uuid[:8]}"
+                        for item_uuid in item_keys:
+                            z_array = cat_group[item_uuid]
 
-                        print(f"  [DEBUG READER] Готовим прокси для: {img_name} ({img_uuid})")
+                            try:
+                                attrs_dict = dict(z_array.attrs)
+                                item_name = attrs_dict.get("name", f"Item_{item_uuid[:8]}")
+                            except Exception as e:
+                                print(f" [DEBUG READER] ⚠️ Ошибка чтения атрибутов для {item_uuid}: {e}")
+                                item_name = f"Item_{item_uuid[:8]}"
 
-                        lazy_arr = LazyBmipArray(self.file_path, f"blocks/{block_uuid}/original_images/{img_uuid}")
+                            lazy_arr = LazyBmipArray(self.file_path, f"blocks/{block_uuid}/{category}/{item_uuid}")
 
-                        block_dict["original_images"][img_uuid] = {
-                            "name": img_name,
-                            "data": lazy_arr
-                        }
-                else:
-                    print(f"  [DEBUG READER] ⚠️ Папка 'original_images' отсутствует в {block_uuid}!")
+                            block_dict[category][item_uuid] = {
+                                "name": item_name,
+                                "data": lazy_arr
+                            }
 
                 meta_data['blocks'][block_uuid] = block_dict
 

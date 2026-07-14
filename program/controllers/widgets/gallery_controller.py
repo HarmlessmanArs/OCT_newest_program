@@ -87,41 +87,44 @@ class GalleryWindow(WidgetsWindow):
 
     def _load_images_from_state(self):
         """Восстановление галереи: достаем массивы из датаблока и делаем из них иконки."""
-        # 1. Принудительно очищаем UUID папки-родителя, чтобы 100% найти датаблок
         clean_linked = UuidController.clean_uuid(self.linked)
 
         print(f"\n[DEBUG GALLERY] Запуск восстановления изображений.")
-        print(f"  -> Ищем датаблок по UUID: '{clean_linked}'")
+        print(f" -> Ищем датаблок по UUID: '{clean_linked}'")
 
         if not self.state or not clean_linked:
-            print("  -> [WARN] State или Linked отсутствуют. Выход.")
+            print(" -> [WARN] State или Linked отсутствуют. Выход.")
             return
 
         saved_images = self.state.gallery.get_original_images(clean_linked)
-        print(f"  -> Найдено изображений в State: {len(saved_images)}")
+        print(f" -> Найдено изображений в State: {len(saved_images)}")
 
         for img_uuid, img_data in saved_images.items():
 
-            # 🔥 УНИВЕРСАЛЬНАЯ РАСПАКОВКА ДАННЫХ
+            # 🔥 ТОЧЕЧНЫЙ ФИКС: УНИВЕРСАЛЬНАЯ РАСПАКОВКА ДАННЫХ
             if isinstance(img_data, dict):
-                # Стандартный сценарий: словарь {name: ..., data: ...}
+                # Стандартный сценарий (после ProjectReader): словарь {name: ..., data: ...}
                 file_name = img_data.get("name", f"Image_{img_uuid[:8]}")
                 array_data = img_data.get("data")
-            else:
-                # Альтернативный сценарий: напрямую передан LazyBmipArray или массив
+            elif isinstance(img_data, np.ndarray):
+                # Сценарий для только что загруженных в текущей сессии картинок
                 array_data = img_data
-                file_name = f"Image_{img_uuid[:8]}"  # Запасное имя на случай неудачи
+                # Пытаемся вытащить имя, если State хранит метаданные отдельно, либо ставим дефолт
+                file_name = f"Image_{img_uuid[:8]}"
+            else:
+                # Альтернативный сценарий: напрямую передан LazyBmipArray
+                array_data = img_data
+                file_name = f"Image_{img_uuid[:8]}"
 
-                # Пытаемся вытащить оригинальное имя прямо из атрибутов Zarr-архива
-                if hasattr(array_data, '_load_array'):
-                    try:
-                        z_arr = array_data._load_array()
-                        # Безопасно извлекаем атрибуты в виде словаря
-                        file_name = dict(z_arr.attrs).get("name", file_name)
-                    except Exception as e:
-                        print(f"  -> [WARN] Не удалось прочитать атрибуты Zarr для {img_uuid}: {e}")
+            # Пытаемся вытащить оригинальное имя прямо из атрибутов Zarr-архива
+            if hasattr(array_data, '_load_array'):
+                try:
+                    z_arr = array_data._load_array()
+                    file_name = dict(z_arr.attrs).get("name", file_name)
+                except Exception as e:
+                    print(f" -> [WARN] Не удалось прочитать атрибуты Zarr для {img_uuid}: {e}")
 
-            print(f"  -> Рендер иконки для: {file_name} (UUID: {img_uuid})")
+            print(f" -> Рендер иконки для: {file_name} (UUID: {img_uuid})")
 
             item = QStandardItem(file_name)
 

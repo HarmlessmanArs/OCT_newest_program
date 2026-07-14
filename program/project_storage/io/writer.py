@@ -77,19 +77,6 @@ class ProjectWriter:
 
                 for attempt in range(max_retries):
                     try:
-                        # target = str(self.target_path)
-                        #
-                        # for proc in psutil.process_iter(['pid', 'name']):
-                        #     try:
-                        #         for f in proc.open_files():
-                        #             if target.lower() in f.path.lower():
-                        #                 print(
-                        #                     f"HOLDER PID={proc.pid} "
-                        #                     f"NAME={proc.name()} "
-                        #                     f"FILE={f.path}"
-                        #                 )
-                        #     except Exception:
-                        #         pass
                         os.replace(tmp_path, self.target_path)
                         print(f"  [DEBUG WRITER] Файл успешно заменен: {self.target_path}")
                         success = True
@@ -108,12 +95,6 @@ class ProjectWriter:
                                 except:
                                     pass
                             raise RuntimeError(f"Критическая ошибка при записи .bmip: {str(e)}")
-
-                # # 3. Атомарная замена файла на диске
-                # if self.target_path.exists():
-                #     self.target_path.unlink()
-                # tmp_path.rename(self.target_path)
-                # print(f"  [DEBUG WRITER] Временный файл успешно переименован в {self.target_path}")
 
         except Exception as e:
             if store:
@@ -172,20 +153,21 @@ class ProjectWriter:
         metadata = {}
         if isinstance(data, dict):
             actual_array = data.get("data")
-            # Сохраняем остальные ключи (например, "name") как метаданные
             metadata = {k: v for k, v in data.items() if k != "data"}
         else:
             actual_array = data
 
-        # Защита от пустых данных (если data в словаре был None)
         if actual_array is None:
             return
 
-        # ФИКС: Если это ленивый массив из загруженного проекта, выгружаем его полностью!
-        if hasattr(actual_array, 'load_fully'):
-            actual_array = actual_array.load_fully()
+        # 🔥 ТОЧЕЧНЫЙ ФИКС: Если это ленивый массив (LazyBmipArray), выгружаем через срез
+        if hasattr(actual_array, 'file_path') or hasattr(actual_array, '_load_array'):
+            try:
+                actual_array = actual_array[:]
+            except Exception as e:
+                print(f" [DEBUG WRITER] ⚠️ Не удалось выгрузить ленивый массив {name}: {e}")
 
-        # Теперь безопасно приводим к numpy, зная, что это реальные данные, а не словарь
+        # Теперь безопасно приводим к numpy
         if not isinstance(actual_array, np.ndarray):
             actual_array = np.array(actual_array)
 
@@ -199,14 +181,14 @@ class ProjectWriter:
         else:
             chunks = None
 
-        # 2. Создаем массив Zarr (используем только извлеченный actual_array)
+        # 2. Создаем массив Zarr
         z_array = parent_group.create_array(
             name=name,
             data=actual_array,
             chunks=chunks
         )
 
-        # 3. Записываем метаданные ("name" и др.) в атрибуты Zarr-массива
+        # 3. Записываем метаданные в атрибуты Zarr-массива
         for meta_key, meta_value in metadata.items():
             z_array.attrs[meta_key] = meta_value
 

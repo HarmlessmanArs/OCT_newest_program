@@ -267,3 +267,46 @@ class InterfaceController(QObject):
             print(f"  - [Успех] Элемент дерева '{target_item.text()}' успешно выбран.")
         else:
             print(f"  - [Внимание] Виджет с UUID {uuid_str} не найден в структуре tree_model.")
+
+    def remove_item_from_tree_by_uuid(self, uuid_str: str) -> bool:
+        """
+        Рекурсивно ищет элемент в дереве проекта по его UUID
+        и удаляет его из отображения (ФИКС КРЕСТИКА ОКНА).
+        """
+        # Предполагаем, что модель дерева лежит в self.win.tree_model или self.tree_model
+        model = getattr(self.win, 'tree_model', None)
+        if not model:
+            print("[TREE SYNC ERROR] Не найдена модель дерева проекта.")
+            return False
+
+        uuid_str = str(uuid_str).strip().lower()
+
+        def find_and_remove(parent_item):
+            for row in range(parent_item.rowCount()):
+                child = parent_item.child(row)
+                if child:
+                    # Вытаскиваем UUID, который мы сохраняли в UserRole при построении
+                    item_uuid = str(child.data(Qt.ItemDataRole.UserRole)).strip().lower()
+
+                    if item_uuid == uuid_str:
+                        print(f"[TREE SYNC] Элемент {uuid_str} найден в дереве. Удаляем строку {row}.")
+                        parent_item.removeRow(row)
+                        return True
+
+                    # Рекурсивный спуск в подпапки
+                    if find_and_remove(child):
+                        return True
+            return False
+
+        # Блокируем сигналы на время удаления, чтобы избежать гонки перерисовок
+        model.blockSignals(True)
+        try:
+            success = find_and_remove(model.invisibleRootItem())
+        finally:
+            model.blockSignals(False)
+
+        if success:
+            # Принудительно уведомляем QTreeView, что вид поменялся
+            if hasattr(self.win, 'tree_view'):
+                self.win.tree_view.update()
+        return success
