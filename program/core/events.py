@@ -4,25 +4,29 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 class EventBus(QObject):
     """
-    Единая шина событий. Никакие окна не общаются напрямую.
-    Всё идет через эти сигналы.
+    Глобальная шина событий.
+    Отвязывает логику от интерфейса: никто не вызывает методы чужих окон напрямую.
     """
-    # Жизненный цикл проекта
+    # --- Жизненный цикл проекта ---
     project_created = pyqtSignal()
-    project_loaded = pyqtSignal(str)  # передаем путь
+    project_loaded = pyqtSignal(str)  # Передаем путь к файлу
     project_saved = pyqtSignal()
+    project_modified = pyqtSignal(bool)  # Сигнал, чтобы зажечь [*] в заголовке окна
 
-    # Работа с деревом (Иерархия)
-    node_added = pyqtSignal(str)  # передаем UUID узла
-    node_deleted = pyqtSignal(str)  # передаем UUID удаленного узла
-    node_selected = pyqtSignal(str)  # передаем UUID
+    # --- Изменения в данных (Дерево/Узлы) ---
+    node_added = pyqtSignal(str)  # Передаем uid созданного узла
+    node_removed = pyqtSignal(str)  # Передаем uid удаленного узла
+    node_renamed = pyqtSignal(str, str)  # Передаем uid и новое имя
 
-    # Запросы от интерфейса к математике
-    request_roi_processing = pyqtSignal(str)  # UUID картинки/галереи
+    # --- Интерфейс (MDI и Меню) ---
+    request_open_widget = pyqtSignal(str)  # Запрос на открытие окна (передаем uid)
+    active_widget_changed = pyqtSignal(str)  # Сменилось активное окно (передаем uid)
 
-    # Окна (MDI)
-    open_widget_requested = pyqtSignal(str, str)  # UUID узла, тип виджета ('gallery', 'roi' и т.д.)
+    # --- Вычислительные запросы (Для ваших imaging_*.ui модулей) ---
+    request_processing = pyqtSignal(str, str)  # uid исходных данных, тип обработки (roi, boundaries)
+
+    node_moved = pyqtSignal(str, str)
 
 
-# Глобальный экземпляр шины
+# Создаем глобальный экземпляр, который будем импортировать в другие файлы
 bus = EventBus()

@@ -1,14 +1,16 @@
-import zarr
-from zarr.storage import ZipStore
+from program.core.state import state
 
-file_path = r"D:\Docs\Tuchin\Test\project_newest\Default_project.bmip"
+# Имитируем создание папки
+folder = state.add_node("Dataset 1", "folder")
 
-print("Открываем Zarr архив...")
-store = ZipStore(file_path, mode='r')
-root = zarr.open_group(store=store, mode='r')
+# Создаем две галереи с одинаковыми именами (имитация бага пользователя)
+gal1 = state.add_node("Gallery", "gallery", parent_uid=folder.uid)
+gal2 = state.add_node("Gallery", "gallery", parent_uid=folder.uid)
 
-# Эта команда распечатает всё дерево датаблоков и массивов!
-print(f'project path: {file_path}')
-print(root.tree())
+print(f"Имя первой: {gal1.name}") # Выведет: Gallery
+print(f"Имя второй: {gal2.name}") # Выведет: Gallery (1)  <-- Баг №3 устранен!
 
-store.close()
+# Проверяем каскадное удаление
+print(f"Всего узлов до удаления: {len(state.nodes)}") # 3 (папка + 2 галереи)
+state.remove_node(folder.uid)
+print(f"Всего узлов после: {len(state.nodes)}") # 0 (папка удалилась, потянув за собой галереи)
