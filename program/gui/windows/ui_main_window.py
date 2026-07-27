@@ -12,7 +12,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(1058, 848)
+        MainWindow.resize(1058, 655)
         MainWindow.setMinimumSize(QtCore.QSize(800, 500))
         MainWindow.setMaximumSize(QtCore.QSize(16777215, 16777215))
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
@@ -22,12 +22,12 @@ class Ui_MainWindow(object):
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
         self.gridLayout.setObjectName("gridLayout")
         self.widgets_area = QtWidgets.QMdiArea(parent=self.centralwidget)
-        self.widgets_area.setMinimumSize(QtCore.QSize(1060, 676))
+        self.widgets_area.setMinimumSize(QtCore.QSize(900, 676))
         self.widgets_area.setObjectName("widgets_area")
         self.gridLayout.addWidget(self.widgets_area, 0, 1, 1, 1)
         self.file_info = QtWidgets.QTreeView(parent=self.centralwidget)
         self.file_info.setMinimumSize(QtCore.QSize(100, 500))
-        self.file_info.setMaximumSize(QtCore.QSize(350, 16777215))
+        self.file_info.setMaximumSize(QtCore.QSize(200, 16777215))
         self.file_info.setObjectName("file_info")
         self.gridLayout.addWidget(self.file_info, 0, 0, 1, 1)
         MainWindow.setCentralWidget(self.centralwidget)

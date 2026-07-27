@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1058</width>
-    <height>848</height>
+    <height>655</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -43,7 +43,7 @@
      <widget class="QMdiArea" name="widgets_area">
       <property name="minimumSize">
        <size>
-        <width>1060</width>
+        <width>900</width>
         <height>676</height>
        </size>
       </property>
@@ -59,7 +59,7 @@
       </property>
       <property name="maximumSize">
        <size>
-        <width>350</width>
+        <width>200</width>
         <height>16777215</height>
        </size>
       </property>

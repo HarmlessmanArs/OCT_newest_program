@@ -1,5 +1,6 @@
 # program/core/state.py
 import uuid
+import re
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 from .events import bus
@@ -26,10 +27,19 @@ class ProjectState:
         self.active_widget_uid: Optional[str] = None
 
     def reset(self):
-        """Полная очистка при создании нового проекта"""
+        """Полная очистка при создании нового проекта и генерация стартовой папки"""
         self.nodes.clear()
-        self.filepath = None
+        self.filepath = "[New Project]"
         self.active_widget_uid = None
+
+        # Трубим в шину, что проект обнулился (TreeController очистит старые визуальные элементы)
+        bus.project_created.emit()
+
+        # Пункт 4: Создаем папку по умолчанию. Твой метод add_node сам сгенерирует UID
+        # и отправит сигнал node_added, благодаря чему папка появится в интерфейсе
+        self.add_node(name="Dataset 1", node_type="folder")
+
+        # Так как это чистый стартовый проект, сбрасываем статус "изменен" (убираем [*])
         self.set_modified(False)
 
     def set_modified(self, modified: bool = True):
@@ -42,33 +52,30 @@ class ProjectState:
         """Возвращает всех потомков конкретной папки"""
         return [node for node in self.nodes.values() if node.parent_uid == parent_uid]
 
-    def _generate_unique_name(self, base_name: str, parent_uid: Optional[str]) -> str:
+    def _generate_unique_name(self, base_name: str) -> str:
         """
-        Решение проблемы дубликатов:
-        Если в папке уже есть 'Gallery 1', вернет 'Gallery 1 (1)'
+        Глобальная уникальность имени.
+        Ищет свободный номер по всему проекту. 'Dataset' -> 'Dataset 1' -> 'Dataset 2'
         """
-        existing_names = {
-            node.name for node in self.nodes.values()
-            if node.parent_uid == parent_uid
-        }
+        existing_names = {node.name for node in self.nodes.values()}
 
-        if base_name not in existing_names:
-            return base_name
+        # Отделяем текстовую базу от возможного номера на конце (например, "Dataset" от "1")
+        match = re.match(r"^(.*?)(\s+\d+)?$", base_name)
+        prefix = match.group(1).strip() if match else base_name
 
         counter = 1
-        new_name = f"{base_name} ({counter})"
-        while new_name in existing_names:
+        while True:
+            new_name = f"{prefix} {counter}"
+            if new_name not in existing_names:
+                return new_name
             counter += 1
-            new_name = f"{base_name} ({counter})"
-
-        return new_name
 
     def add_node(self, name: str, node_type: str, parent_uid: Optional[str] = None) -> ProjectNode:
         """Создает новый узел (папку, галерею, расчет ROI)"""
         uid = str(uuid.uuid4())
 
-        # Гарантируем уникальность имени в рамках родителя
-        safe_name = self._generate_unique_name(name, parent_uid)
+        # Теперь мы передаем только желаемое имя, счетчик подберется глобально
+        safe_name = self._generate_unique_name(name)
 
         new_node = ProjectNode(
             uid=uid,
@@ -79,26 +86,21 @@ class ProjectState:
         self.nodes[uid] = new_node
         self.set_modified(True)
 
-        # Трубим на всю программу, что данные добавились (Дерево услышит и обновится)
         bus.node_added.emit(uid)
         return new_node
 
-    def remove_node(self, uid: str):
-        """Удаляет узел и КАСКАДНО удаляет всех его детей (виджеты внутри папки)"""
+    def rename_node(self, uid: str, new_name: str):
+        """Безопасное переименование с глобальной проверкой"""
         if uid not in self.nodes:
             return
 
-        # Сначала рекурсивно удаляем всех детей
-        children = self.get_children(uid)
-        for child in children:
-            self.remove_node(child.uid)
+        node = self.nodes[uid]
+        safe_name = self._generate_unique_name(new_name)
 
-        # Затем удаляем сам узел
-        del self.nodes[uid]
-        self.set_modified(True)
-
-        # Окна и Дерево услышат это и самоуничтожатся (Решает проблему окон-призраков)
-        bus.node_removed.emit(uid)
+        if node.name != safe_name:
+            node.name = safe_name
+            self.set_modified(True)
+            bus.node_renamed.emit(uid, safe_name)
 
     def rename_node(self, uid: str, new_name: str):
         """Безопасное переименование"""
@@ -131,7 +133,7 @@ class ProjectState:
             return
 
         # Проверяем, нет ли в новой папке файла с таким же именем
-        safe_name = self._generate_unique_name(node.name, new_parent_uid)
+        safe_name = self._generate_unique_name(node.name)
 
         node.parent_uid = new_parent_uid
 
