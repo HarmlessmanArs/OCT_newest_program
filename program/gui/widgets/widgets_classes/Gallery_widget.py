@@ -52,26 +52,25 @@ class GalleryWidget(BaseProjectWidget):
         # Разрешаем множественный выбор через Shift и Ctrl
         self.ui.gallery_view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
 
-        # Включаем режим отображения иконок (чтобы выглядело как настоящая галерея, а не список текстов)
+        # Режим отображения иконок
         self.ui.gallery_view.setViewMode(QtWidgets.QListView.ViewMode.IconMode)
         self.ui.gallery_view.setIconSize(QtCore.QSize(120, 120))
         self.ui.gallery_view.setResizeMode(QtWidgets.QListView.ResizeMode.Adjust)
         self.ui.gallery_view.setSpacing(10)
 
         # БЛОКИРОВКА ПЕРЕМЕЩЕНИЯ И РЕДАКТИРОВАНИЯ:
-        # 1. Фиксируем элементы в сетке (запрещаем свободное перетаскивание по полю)
         self.ui.gallery_view.setMovement(QtWidgets.QListView.Movement.Static)
-        # 2. Отключаем стартовую логику Drag&Drop
         self.ui.gallery_view.setDragEnabled(False)
         self.ui.gallery_view.setAcceptDrops(False)
-        # 3. Отключаем редактирование текста при кликах
         self.ui.gallery_view.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
 
+        # Подключаем сортировку из UI (Qt Designer)
+        self.ui.SortBycomboBox.currentIndexChanged.connect(self.sort_gallery)
+
         # 2. Инициализация дочерних окон
-        # Создаем окно Data Info один раз, чтобы оно сохраняло свои значения (введенный пиксель и т.д.)
         self.data_info_dialog = DataInfoDialog(self)
 
-        # 3. Подключение сигналов кнопок к слотам (функциям)
+        # 3. Подключение сигналов кнопок к слотам
         self.ui.load_imageButton.clicked.connect(self.load_images)
         self.ui.delete_imagesButton.clicked.connect(self.delete_images)
         self.ui.imgs_t_processButton.clicked.connect(self.images_to_process)
@@ -97,15 +96,51 @@ class GalleryWidget(BaseProjectWidget):
             icon = QIcon(pixmap)
 
             item = QStandardItem(icon, filename)
+
+            # Сохраняем полный путь (понадобится для процессинга)
             item.setData(path, QtCore.Qt.ItemDataRole.UserRole)
 
-            # Явно убираем у элемента флаги перетаскивания и редактирования
+            # Сохраняем время изменения файла (File changed)
+            file_mtime = os.path.getmtime(path)
+            item.setData(file_mtime, QtCore.Qt.ItemDataRole.UserRole + 1)
+
+            # Сохраняем время создания файла (File created, для Windows getctime = создание)
+            file_ctime = os.path.getctime(path)
+            item.setData(file_ctime, QtCore.Qt.ItemDataRole.UserRole + 2)
+
             flags = item.flags()
             flags &= ~QtCore.Qt.ItemFlag.ItemIsDragEnabled
             flags &= ~QtCore.Qt.ItemFlag.ItemIsEditable
             item.setFlags(flags)
 
             self.model.appendRow(item)
+
+        # Применяем сортировку после загрузки новой партии
+        self.sort_gallery()
+
+    def sort_gallery(self):
+        """Сортировка изображений согласно выбору в ComboBox"""
+        if self.model.rowCount() == 0:
+            return
+
+        sort_type = self.ui.SortBycomboBox.currentText()
+        items = []
+
+        # Извлекаем все строки из модели
+        while self.model.rowCount() > 0:
+            items.append(self.model.takeRow(0))
+
+        # Сортируем список строк в зависимости от выбранного критерия в Qt Designer
+        if sort_type == "Name":
+            items.sort(key=lambda row: row[0].text().lower())
+        elif sort_type == "File changed":
+            items.sort(key=lambda row: row[0].data(QtCore.Qt.ItemDataRole.UserRole + 1))
+        elif sort_type == "File created":
+            items.sort(key=lambda row: row[0].data(QtCore.Qt.ItemDataRole.UserRole + 2))
+
+        # Возвращаем отсортированные строки обратно в модель
+        for row in items:
+            self.model.appendRow(row)
 
     def delete_images(self):
         """Удаление выбранных изображений из галереи"""
@@ -114,8 +149,7 @@ class GalleryWidget(BaseProjectWidget):
         if not selected_indexes:
             return
 
-        # Удалять строки нужно строго с конца (reverse=True),
-        # иначе индексы сместятся, и программа крашнется
+        # Удалять строки нужно строго с конца (reverse=True)
         for index in sorted(selected_indexes, key=lambda x: x.row(), reverse=True):
             self.model.removeRow(index.row())
 
@@ -129,7 +163,6 @@ class GalleryWidget(BaseProjectWidget):
 
         selected_files = []
         for index in selected_indexes:
-            # Достаем полный путь, который мы спрятали в UserRole при загрузке
             file_path = self.model.data(index, QtCore.Qt.ItemDataRole.UserRole)
             selected_files.append(file_path)
 
@@ -137,7 +170,7 @@ class GalleryWidget(BaseProjectWidget):
         for f in selected_files:
             print(f" -> {f}")
 
-        # TODO: Здесь в будущем будет отправка путей в State/Worker для математики
+        # TODO: Здесь будет логика передачи путей дальше
 
     def show_data_info(self):
         """Открытие окна информации о датасете"""
