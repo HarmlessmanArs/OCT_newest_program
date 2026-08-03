@@ -1,5 +1,6 @@
 # program/controllers/main_controller.py
-from PyQt6.QtWidgets import QMainWindow, QMdiSubWindow, QMenu
+from pathlib import Path
+from PyQt6.QtWidgets import QMainWindow, QMdiSubWindow, QMenu, QFileDialog, QMessageBox
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt
 
@@ -7,11 +8,17 @@ from ..gui.windows.ui_main_window import Ui_MainWindow
 from ..core.events import bus
 from ..core.state import state
 from .tree_controller import TreeController
+from ..state.user_settings_state import UserSettingsState
+from ..state.temp_manager import TempWorkspace
 
 
 class MainController(QMainWindow):
-    def __init__(self):
+    def __init__(self, settings: UserSettingsState, temp_workspace: TempWorkspace):
         super().__init__()
+
+        self.settings = settings
+        self.temp_workspace = temp_workspace
+
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
@@ -60,6 +67,10 @@ class MainController(QMainWindow):
 
         # Меню Instruments (Пример, как запрашивать создание галереи)
         self.ui.actionCreate_new_gallery.triggered.connect(self.on_create_gallery)
+        self.ui.actionTMP_path.triggered.connect(self.on_change_temp_path)
+
+        # self.ui.actionUndo.triggered.connect(self.on_undo_triggered)
+        # self.ui.actionRedo.triggered.connect(self.on_redo_triggered)
 
     def _subscribe_to_events(self):
         """Подписка на глобальную шину событий"""
@@ -213,3 +224,28 @@ class MainController(QMainWindow):
             sub_window = self.active_mdi_windows.pop(node_uid)
             sub_window.close()
             sub_window.deleteLater()
+
+
+    def on_change_temp_path(self):
+        """Обработчик нажатия на кнопку выбора кэш-диска (TMP path)"""
+        # Берем текущий путь или домашнюю директорию, если путь еще не задан
+        current_path = str(self.settings.workspace_temp_folder) if self.settings.workspace_temp_folder else str(Path.home())
+
+        # Открываем диалог выбора папки
+        new_dir = QFileDialog.getExistingDirectory(
+            self,
+            "Выберите диск/папку для временных файлов (Scratch Disk)",
+            current_path
+        )
+
+        if new_dir:
+            # Сохраняем новый путь в наши настройки
+            self.settings.workspace_temp_folder = Path(new_dir)
+            self.settings.save()
+
+            # Предупреждаем пользователя
+            QMessageBox.information(
+                self,
+                "Настройки обновлены",
+                f"Новый путь для кэша успешно задан:\n{new_dir}\n\nИзменения вступят в силу при создании нового проекта или открытии файла."
+            )
