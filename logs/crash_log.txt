@@ -1,0 +1,14 @@
+2026-08-03 16:28:36,269 - ERROR -  –»“»◊≈— ¿ﬂ Œÿ»¡ ¿:
+Traceback (most recent call last):
+  File "C:\Users\Workf\PycharmProjects\GitProjects\OCT_newest_program\program\controllers\main_controller.py", line 195, in _on_load_finished
+    bus.project_reset.emit()
+    ^^^^^^^^^^^^^^^^^
+AttributeError: 'EventBus' object has no attribute 'project_reset'. Did you mean: 'project_created'?
+
+2026-08-04 13:08:21,060 - ERROR -  –»“»◊≈— ¿ﬂ Œÿ»¡ ¿:
+Traceback (most recent call last):
+  File "C:\Users\Workf\PycharmProjects\GitProjects\OCT_newest_program\program\controllers\main_controller.py", line 195, in _on_load_finished
+    state.sig_project_loaded.emit()
+    ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ProjectState' object has no attribute 'sig_project_loaded'
+

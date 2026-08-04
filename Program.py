@@ -5,11 +5,14 @@ from program.controllers.main_controller import MainController
 
 from program.state.user_settings_state import UserSettingsState
 from program.state.temp_manager import TempWorkspace
+from program.core.error_manager import ErrorManager
 
 
 def main():
     app = QApplication(sys.argv)
 
+    error_manager = ErrorManager()
+    error_manager.setup_hooks()
     settings = UserSettingsState.load()
     temp_workspace = TempWorkspace(custom_base_dir=settings.workspace_temp_folder)
 
