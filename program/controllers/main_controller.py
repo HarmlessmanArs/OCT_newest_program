@@ -207,12 +207,23 @@ class MainController(QMainWindow):
             self.statusBar().showMessage("Проект успешно загружен", 4000)
             self._update_window_title(False)
 
-            # 1. Сигнализируем о "новом" проекте (TreeController очистит старые элементы)
+            # 1. Сигнализируем о "новом" проекте
             bus.project_created.emit()
 
-            # 2. Заставляем дерево перерисовать все загруженные из файла узлы
+            # 2. Отрисовываем все загруженные узлы в интерфейсе
             for uid in state.nodes:
                 bus.node_added.emit(uid)
+
+            # 3. ВОССТАНАВЛИВАЕМ ПОСЛЕДНЕЕ ОТКРЫТОЕ ОКНО
+            if state.active_widget_uid and state.get_node(state.active_widget_uid):
+                # Выделяем его в дереве (синхронизация UI)
+                self.tree_controller.select_node(state.active_widget_uid)
+
+                # Открываем само окно
+                bus.request_open_widget.emit(state.active_widget_uid)
+
+                # Фильтруем остальные окна, чтобы показать соседей по папке
+                bus.active_widget_changed.emit(state.active_widget_uid)
         else:
             self.statusBar().showMessage("Ошибка загрузки!", 4000)
             QMessageBox.critical(self, "Ошибка загрузки", f"Не удалось открыть проект:\n{error_message}")
@@ -295,6 +306,9 @@ class MainController(QMainWindow):
         if not node:
             return
 
+        # ЗАПОМИНАЕМ АКТИВНЫЙ ВИДЖЕТ ДЛЯ СОХРАНЕНИЯ В .BMIP
+        state.active_widget_uid = node_uid
+
         if node_uid in self.active_mdi_windows:
             sub = self.active_mdi_windows[node_uid]
             sub.show()
@@ -304,13 +318,11 @@ class MainController(QMainWindow):
             return
 
         from program.gui.widgets.factory import WidgetFactory
-
         widget = WidgetFactory.create(node.node_type, node.uid)
         sub_window = self.ui.widgets_area.addSubWindow(widget)
 
         sub_window.resize(widget.minimumSize().width() + 20,
                           widget.minimumSize().height() + 40)
-
         sub_window.setWindowTitle(node.name)
         sub_window.show()
 
@@ -321,6 +333,11 @@ class MainController(QMainWindow):
         node = state.get_node(uid)
         if not node:
             return
+
+        if node.node_type != "folder":
+            # Запоминаем последний кликнутый виджет
+            state.active_widget_uid = uid
+
         if node.node_type == "folder":
             self._update_mdi_visibility(uid)
         elif node.parent_uid:

@@ -44,15 +44,6 @@ class TreeController:
         bus.node_renamed.connect(self._on_node_renamed)
         bus.node_moved.connect(self._on_node_moved)
 
-    def _setup_view_connections(self):
-        """Подписка на действия пользователя в интерфейсе"""
-        # Двойной клик — запрос на открытие окна (галереи, графика и т.д.)
-        self.tree.doubleClicked.connect(self._on_double_clicked)
-
-        # Одинарный клик — обновление видимости окон (фича OriginPro)
-        selection_model = self.tree.selectionModel()
-        selection_model.selectionChanged.connect(self._on_selection_changed)
-
     # --- Обработчики событий шины (От State к UI) ---
 
     def _on_project_created(self):
@@ -60,19 +51,27 @@ class TreeController:
         self.model.removeRows(0, self.model.rowCount())
         self._items.clear()
 
+    def _setup_view_connections(self):
+        """Подписка на действия пользователя в интерфейсе"""
+        # Двойной клик — запрос на открытие окна
+        self.tree.doubleClicked.connect(self._on_double_clicked)
+        # Одинарный клик — обновление видимости окон
+        self.tree.selectionModel().selectionChanged.connect(self._on_selection_changed)
+
+        # НОВОЕ: Подписка на переименование элемента пользователем
+        self.model.itemChanged.connect(self._on_item_changed)
+
     def _on_node_added(self, uid: str):
         """Добавление нового узла в дерево"""
         node = state.get_node(uid)
         if not node:
             return
 
-        # Создаем визуальный элемент
         item = QStandardItem(node.name)
-        # Прячем UID внутри элемента, чтобы знать, кто есть кто при клике
         item.setData(uid, Qt.ItemDataRole.UserRole)
-        item.setEditable(False)  # Пока запрещаем переименование двойным кликом
+        # ИЗМЕНЕНО: Разрешаем переименование прямо в дереве
+        item.setEditable(True)
 
-        # Устанавливаем иконки в зависимости от типа
         style = self.tree.style()
         if node.node_type == "folder":
             icon = style.standardIcon(QStyle.StandardPixmap.SP_DirIcon)
@@ -82,13 +81,38 @@ class TreeController:
 
         self._items[uid] = item
 
-        # Добавляем элемент в родительскую папку или в корень
         if node.parent_uid and node.parent_uid in self._items:
             parent_item = self._items[node.parent_uid]
             parent_item.appendRow(item)
-            self.tree.expand(parent_item.index())  # Раскрываем папку
+            self.tree.expand(parent_item.index())
         else:
             self.model.invisibleRootItem().appendRow(item)
+
+    def _on_node_renamed(self, uid: str, new_name: str):
+        """Обновление имени узла по сигналу из ядра"""
+        if uid in self._items:
+            item = self._items[uid]
+            # ВАЖНО: Отключаем сигналы, чтобы не вызвать бесконечный цикл
+            # (UI изменился -> Ядро -> UI изменился -> Ядро)
+            self.model.blockSignals(True)
+            item.setText(new_name)
+            self.model.blockSignals(False)
+
+    def _on_item_changed(self, item: QStandardItem):
+        """Обработка переименования элемента пользователем"""
+        uid = item.data(Qt.ItemDataRole.UserRole)
+        new_name = item.text()
+
+        node = state.get_node(uid)
+        if node and node.name != new_name:
+            # Отправляем новое имя в ядро, оно само подберет суффикс, если есть дубликат
+            state.rename_node(uid, new_name)
+
+    def select_node(self, uid: str):
+        """Программное выделение узла (полезно при загрузке проекта)"""
+        if uid in self._items:
+            index = self._items[uid].index()
+            self.tree.setCurrentIndex(index)
 
     def _on_node_removed(self, uid: str):
         """Удаление узла из дерева"""
@@ -100,11 +124,6 @@ class TreeController:
             item.parent().removeRow(item.row())
         else:
             self.model.invisibleRootItem().removeRow(item.row())
-
-    def _on_node_renamed(self, uid: str, new_name: str):
-        """Обновление имени узла"""
-        if uid in self._items:
-            self._items[uid].setText(new_name)
 
     def _on_node_moved(self, uid: str, new_parent_uid: str):
         """Перемещение узла (задел для Drag & Drop)"""

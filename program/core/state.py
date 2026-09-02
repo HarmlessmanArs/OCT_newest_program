@@ -90,25 +90,13 @@ class ProjectState:
         return new_node
 
     def rename_node(self, uid: str, new_name: str):
-        """Безопасное переименование с глобальной проверкой"""
+        """Безопасное переименование с глобальной проверкой на дубликаты"""
         if uid not in self.nodes:
             return
 
         node = self.nodes[uid]
+        # Используем существующий механизм защиты от дубликатов
         safe_name = self._generate_unique_name(new_name)
-
-        if node.name != safe_name:
-            node.name = safe_name
-            self.set_modified(True)
-            bus.node_renamed.emit(uid, safe_name)
-
-    def rename_node(self, uid: str, new_name: str):
-        """Безопасное переименование"""
-        if uid not in self.nodes:
-            return
-
-        node = self.nodes[uid]
-        safe_name = self._generate_unique_name(new_name, node.parent_uid)
 
         if node.name != safe_name:
             node.name = safe_name
